@@ -1,11 +1,15 @@
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
-
-#import finnhub
 
 
 NY_TZ = ZoneInfo("America/New_York")
 UTC_TZ = ZoneInfo("UTC")
+
+# Where the on-disk cache lives by default. Callers (pipeline / runners)
+# pass cache_dir=DEFAULT_NEWS_CACHE to turn caching on; tests pass tmp_path.
+DEFAULT_NEWS_CACHE = Path(__file__).parent / "cache"
 
 
 def to_ny_time(ts: datetime) -> datetime:
@@ -97,11 +101,80 @@ def sort_news_newest_first(news_items):
     )
 
 
+def _finnhub_get(ticker, _from, to, api_key):
+    """
+    Single network boundary for FinnHub. Tests monkeypatch this.
+
+    Returns the raw company-news list (list of dicts) for the date range
+    [_from, to], inclusive, as YYYY-MM-DD strings.
+    """
+    import finnhub
+
+    client = finnhub.Client(api_key=api_key)
+
+    return client.company_news(ticker, _from=_from, to=to)
+
+
+def _atomic_write(path, content):
+    """
+    Write content to path via a temporary file + rename, so partial
+    writes from interrupted runs do not corrupt the cache.
+    """
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    tmp_path.replace(path)
+
+
+def _news_cache_path(cache_dir, ticker, _from, to):
+    """
+    Cache file for one (ticker, date-range) request:
+    <cache_dir>/<TICKER>/<from>_<to>.json
+    """
+    return Path(cache_dir) / ticker.upper() / f"{_from}_{to}.json"
+
+
+def _read_news_cache(cache_dir, ticker, _from, to):
+    """
+    Return the cached raw news list for this request, or None if absent.
+    """
+    path = _news_cache_path(cache_dir, ticker, _from, to)
+
+    if not path.exists():
+        return None
+
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    return payload.get("raw", [])
+
+
+def _write_news_cache(cache_dir, ticker, _from, to, raw):
+    """
+    Atomically persist the raw FinnHub response for this request.
+    """
+    path = _news_cache_path(cache_dir, ticker, _from, to)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = {
+        "ticker": ticker.upper(),
+        "from": _from,
+        "to": to,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "raw": raw,
+    }
+
+    _atomic_write(path, json.dumps(payload, indent=2))
+
+
 def fetch_company_news(
     ticker,
     cutoff_timestamp,
     api_key,
     lookback_days=7,
+    cache_dir=None,
 ):
     """
     Fetch company news from FinnHub and filter it to prevent leakage.
@@ -119,23 +192,40 @@ def fetch_company_news(
         lookback_days:
             Number of days before the cutoff to request.
 
+        cache_dir:
+            Optional directory for an on-disk request cache. When set, a
+            repeated (ticker, date-range) request is served from disk
+            instead of hitting the API (FinnHub's free tier is quota
+            limited). Pass DEFAULT_NEWS_CACHE in production; None disables
+            caching (used by tests and pure/offline paths). Mirrors the
+            EDGAR / RAG cache convention.
+
     Output:
         List of company news dictionaries published at or before
         the cutoff timestamp.
     """
-    import finnhub    
-
     cutoff_timestamp = to_ny_time(cutoff_timestamp)
 
     start_date = cutoff_timestamp - timedelta(days=lookback_days)
 
-    client = finnhub.Client(api_key=api_key)
+    _from = date_string(start_date)
+    to = date_string(cutoff_timestamp)
 
-    raw_news = client.company_news(
-        ticker,
-        _from=date_string(start_date),
-        to=date_string(cutoff_timestamp),
-    )
+    # The cache stores the RAW API response (what costs quota). Filtering,
+    # the exact cutoff, and sorting are cheap and applied on every read, so
+    # they can change without invalidating the cache. The raw request is
+    # date-granular, matching FinnHub itself; the precise intraday cutoff is
+    # still enforced below, so leakage protection is unchanged.
+    raw_news = None
+
+    if cache_dir is not None:
+        raw_news = _read_news_cache(cache_dir, ticker, _from, to)
+
+    if raw_news is None:
+        raw_news = _finnhub_get(ticker, _from, to, api_key)
+
+        if cache_dir is not None:
+            _write_news_cache(cache_dir, ticker, _from, to, raw_news)
 
     filtered_news = filter_news_before_cutoff(
         raw_news,

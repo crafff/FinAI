@@ -30,6 +30,12 @@ Prediction protocol: baseline = the T₀ close (first tradable day after release
 
 Three-way ablation compares a single-agent baseline, a paper-style aggregation baseline, and the full system, measuring directional accuracy (with confidence intervals), target-price percentage error, and correlated-error rate.
 
+## Running
+
+See **[docs/RUNNING.md](docs/RUNNING.md)** for the end-to-end runbook:
+environment setup, `.env` configuration, data preparation (10-K download +
+RAG index), and running the Fundamental agent standalone.
+
 ## Repository Structure
 
 ```

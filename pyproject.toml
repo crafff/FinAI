@@ -1,0 +1,79 @@
+[project]
+name = "finai"
+version = "0.1.0"
+description = "Multi-Agent LLM System for 10-K-Based One-Week Stock Prediction (Group 4)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # EDGAR 10-K retrieval (Task 1)
+    "requests",
+    "beautifulsoup4",
+    "lxml",
+    # T0 logic (Task 2)
+    "pandas",
+    "pandas-market-calendars",
+    # evaluation + RAG numerics (Tasks 7, 8, 9)
+    "numpy",
+    "scipy",
+    # FinnHub news retrieval (Task 5)
+    "finnhub-python",
+    # price retrieval (Task 3)
+    "yfinance",
+    # financial data retrieval via FMP uses `requests` (above); Task 4
+    # Reddit social retrieval (Task 6)
+    "praw",
+    # unified config: load .env into the environment (Task 20 / config)
+    "python-dotenv",
+    # agent LLM backends (Tasks 10-17): hosted Anthropic + local vLLM
+    # (OpenAI-compatible) via the openai SDK
+    "anthropic",
+    "openai",
+]
+
+[project.optional-dependencies]
+# Heavy embedding stack for 10-K RAG (Task 7). Pulls in torch (~hundreds
+# of MB), so it is opt-in: `uv sync --extra rag`. The RAG unit tests
+# monkeypatch the embedder and pass without it; only the real-embedder
+# smoke test needs this extra.
+rag = [
+    "sentence-transformers",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+# uv treats this as a non-packaged ("virtual") project because there is no
+# [build-system] table: dependencies are managed and locked, but the repo
+# itself is not built or installed as a wheel.
+
+[tool.pytest.ini_options]
+testpaths = [
+    "data/EDGAR_retrieval",
+    "data/t0_logic",
+    "data/rag_10k",
+    "data/FinnHub_retrieval",
+    "data/price_retrieval",
+    "data/financial_retrieval",
+    "data/reddit_retrieval",
+    "contracts",
+    "config",
+    "agents",
+    "evaluation",
+]
+# Make every module importable by bare name so cross-module tests work
+# without per-file sys.path manipulation.
+pythonpath = [
+    "data/EDGAR_retrieval",
+    "data/t0_logic",
+    "data/rag_10k",
+    "data/FinnHub_retrieval",
+    "data/price_retrieval",
+    "data/financial_retrieval",
+    "data/reddit_retrieval",
+    "contracts",
+    "config",
+    "agents",
+    "evaluation",
+]

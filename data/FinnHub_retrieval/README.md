@@ -68,3 +68,22 @@ handling, and sorting work correctly.
 This makes Task 5 independent of the rest of the agent pipeline while
 still aligning with the overall project requirement that all
 agent-visible information must be cut off at the T₀ close.
+
+## Caching
+
+`fetch_company_news(ticker, cutoff_timestamp, api_key, lookback_days=7, cache_dir=None)`
+
+FinnHub's free tier is quota limited, so requests are cached to disk when a
+`cache_dir` is given (mirrors the EDGAR / RAG cache convention). The cache
+key is the `(ticker, from-date, to-date)` of the request, stored at
+`<cache_dir>/<TICKER>/<from>_<to>.json`. A repeated identical request is
+served from disk via the single network boundary `_finnhub_get` and never
+hits the API.
+
+The **raw** API response is what gets cached (that is what costs quota);
+timestamp normalization, the exact cutoff filter, and sorting are reapplied
+on every read, so they can change without invalidating the cache, and the
+precise intraday cutoff is still enforced (no leakage).
+
+Pass `cache_dir=DEFAULT_NEWS_CACHE` (`data/FinnHub_retrieval/cache/`, gitignored) in production. `cache_dir=None` disables caching and always
+calls the API — used by tests and pure/offline paths.

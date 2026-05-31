@@ -1,11 +1,14 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import finnhub_retrieval
 from finnhub_retrieval import (
     to_ny_time,
     unix_to_ny_time,
     filter_news_before_cutoff,
     sort_news_newest_first,
+    fetch_company_news,
+    _news_cache_path,
 )
 
 
@@ -212,3 +215,63 @@ def test_filter_then_sort_news_newest_first():
     assert len(result) == 2
     assert result[0]["headline"] == "Newer valid article"
     assert result[1]["headline"] == "Older valid article"
+
+
+# --------------------------------------------------------------------------
+# Disk cache
+# --------------------------------------------------------------------------
+
+def _raw_item(headline, year, month, day, hour, minute):
+    return {
+        "headline": headline,
+        "summary": "s",
+        "source": "Test",
+        "url": "https://example.com/" + headline,
+        "datetime": make_unix_timestamp(year, month, day, hour, minute),
+    }
+
+
+def _install_fake_get(monkeypatch, raw, call_log):
+    def fake_get(ticker, _from, to, api_key):
+        call_log.append((ticker, _from, to))
+        return raw
+
+    monkeypatch.setattr(finnhub_retrieval, "_finnhub_get", fake_get)
+
+
+def test_fetch_company_news_caches_and_reuses(monkeypatch, tmp_path):
+    cutoff = datetime(2025, 1, 8, 16, 0, tzinfo=NY)
+    raw = [_raw_item("Cached", 2025, 1, 7, 10, 0)]
+
+    call_log = []
+    _install_fake_get(monkeypatch, raw, call_log)
+
+    first = fetch_company_news("AAPL", cutoff, "key", cache_dir=tmp_path)
+    second = fetch_company_news("AAPL", cutoff, "key", cache_dir=tmp_path)
+
+    # The second identical request is served from disk: one API hit total.
+    assert len(call_log) == 1
+    assert [i["headline"] for i in first] == ["Cached"]
+    assert [i["headline"] for i in second] == ["Cached"]
+
+
+def test_fetch_company_news_writes_cache_file(monkeypatch, tmp_path):
+    cutoff = datetime(2025, 1, 8, 16, 0, tzinfo=NY)
+    _install_fake_get(monkeypatch, [_raw_item("X", 2025, 1, 7, 10, 0)], [])
+
+    fetch_company_news("aapl", cutoff, "key", cache_dir=tmp_path)
+
+    expected = _news_cache_path(tmp_path, "AAPL", "2025-01-01", "2025-01-08")
+    assert expected.exists()
+
+
+def test_fetch_company_news_no_cache_dir_always_calls_api(monkeypatch):
+    cutoff = datetime(2025, 1, 8, 16, 0, tzinfo=NY)
+    call_log = []
+    _install_fake_get(monkeypatch, [_raw_item("Y", 2025, 1, 7, 10, 0)], call_log)
+
+    fetch_company_news("AAPL", cutoff, "key")
+    fetch_company_news("AAPL", cutoff, "key")
+
+    # No cache_dir -> every call hits the network.
+    assert len(call_log) == 2

@@ -164,6 +164,6 @@ the run; a summary prints at the end and the script exits non-zero if
 anything failed. Already-cached filings return without HTTP traffic,
 so reruns are fast.
 
-The User-Agent is hard-coded near the top of run_fetch.py. SEC
-requires a descriptive identifier (name + contact email); edit that
-value before sharing the script.
+The User-Agent is read from the `SEC_USER_AGENT` variable in your `.env`
+(see `config/README.md`). SEC requires a descriptive identifier (name +
+contact email); set it there before running.

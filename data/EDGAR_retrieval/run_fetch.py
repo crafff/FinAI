@@ -7,22 +7,34 @@ Outputs go to ./cache/<TICKER>/ as three files per filing:
 Per-ticker failures do not stop the run; a summary is printed at the
 end and the script exits non-zero if anything failed.
 
-Usage from data/EDGAR_retrieval/:
-    python run_fetch.py
+The SEC User-Agent is read from the SEC_USER_AGENT variable in your .env
+(see config/README.md). SEC requires a descriptive identifier (name +
+contact email).
+
+Usage from the repo root:
+    uv run python data/EDGAR_retrieval/run_fetch.py
 """
 
 import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "config"))
+
 from edgar_retrieval import DOW_30, fetch_10k
+from settings import MissingConfigError, load_settings  # noqa: E402
 
 
-USER_AGENT = "FinAI Research ruitaozhou2002@gmail.com"
 CACHE_DIR = Path(__file__).parent / "cache"
 
 
 def main():
+    try:
+        user_agent = load_settings().require_sec_user_agent()
+    except MissingConfigError as exc:
+        print(exc)
+        sys.exit(1)
+
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     successes = []
@@ -36,7 +48,7 @@ def main():
         try:
             result = fetch_10k(
                 ticker,
-                USER_AGENT,
+                user_agent,
                 cache_dir=CACHE_DIR,
             )
 
