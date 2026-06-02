@@ -265,3 +265,114 @@ def test_fetch_reddit_posts_no_cache_dir_always_calls_api(monkeypatch):
     )
 
     assert len(call_log) == 2
+
+
+# --------------------------------------------------------------------------
+# No-auth JSON backend
+# --------------------------------------------------------------------------
+
+def _fake_search_json_payload(post_id, created_utc):
+    """A minimal Reddit search.json response with one child."""
+    return {
+        "data": {
+            "children": [
+                {
+                    "data": {
+                        "id": post_id,
+                        "title": "title " + post_id,
+                        "selftext": "body " + post_id,
+                        "subreddit": "stocks",
+                        "score": 7,
+                        "num_comments": 3,
+                        "url": "http://x/" + post_id,
+                        "permalink": "/r/stocks/" + post_id,
+                        "created_utc": created_utc,
+                    }
+                }
+            ]
+        }
+    }
+
+
+def test_reddit_search_json_maps_fields(monkeypatch):
+    created = make_unix_timestamp(2025, 1, 2, 12, 0)
+
+    def fake_http(url, user_agent):
+        assert "search.json" in url
+        return _fake_search_json_payload("p1", created)
+
+    monkeypatch.setattr(reddit_retrieval, "_http_get_json", fake_http)
+
+    raw = reddit_retrieval._reddit_search_json("AAPL", ("stocks",), 10, "ua")
+
+    assert len(raw) == 1
+    # Raw dict carries exactly the fields format_post reads, so it threads
+    # straight through filter/sort like the PRAW path.
+    assert raw[0]["id"] == "p1"
+    assert raw[0]["created_utc"] == created
+    assert format_post(raw[0])["title"] == "title p1"
+
+
+def test_reddit_search_json_skips_failing_subreddit(monkeypatch):
+    created = make_unix_timestamp(2025, 1, 2, 12, 0)
+
+    def fake_http(url, user_agent):
+        if "/r/investing/" in url:
+            raise RuntimeError("rate limited")
+        return _fake_search_json_payload("p1", created)
+
+    monkeypatch.setattr(reddit_retrieval, "_http_get_json", fake_http)
+
+    raw = reddit_retrieval._reddit_search_json(
+        "AAPL", ("stocks", "investing"), 10, "ua"
+    )
+
+    # The failing subreddit is skipped, not fatal.
+    assert [p["id"] for p in raw] == ["p1"]
+
+
+def test_fetch_reddit_posts_auto_uses_json_without_credentials(monkeypatch):
+    cutoff = datetime(2025, 1, 2, 16, 0, tzinfo=NY)
+    created = make_unix_timestamp(2025, 1, 2, 12, 0)
+
+    json_calls = []
+
+    def fake_json(query, subreddits, limit, user_agent):
+        json_calls.append(query)
+        return [_raw_post("p1", created)]
+
+    def boom_praw(*args, **kwargs):
+        raise AssertionError("PRAW backend must not be used without credentials")
+
+    monkeypatch.setattr(reddit_retrieval, "_reddit_search_json", fake_json)
+    monkeypatch.setattr(reddit_retrieval, "_reddit_search", boom_praw)
+
+    posts = fetch_reddit_posts("AAPL", cutoff, subreddits=("stocks",))
+
+    assert json_calls == ["AAPL"]
+    assert [p["id"] for p in posts] == ["p1"]
+
+
+def test_fetch_reddit_posts_auto_uses_praw_with_credentials(monkeypatch):
+    cutoff = datetime(2025, 1, 2, 16, 0, tzinfo=NY)
+    created = make_unix_timestamp(2025, 1, 2, 12, 0)
+
+    praw_calls = []
+
+    def fake_praw(query, subreddits, limit, client_id, client_secret, user_agent):
+        praw_calls.append(query)
+        return [_raw_post("p1", created)]
+
+    def boom_json(*args, **kwargs):
+        raise AssertionError("JSON backend must not be used when credentials set")
+
+    monkeypatch.setattr(reddit_retrieval, "_reddit_search", fake_praw)
+    monkeypatch.setattr(reddit_retrieval, "_reddit_search_json", boom_json)
+
+    posts = fetch_reddit_posts(
+        "AAPL", cutoff, client_id="id", client_secret="s", user_agent="ua",
+        subreddits=("stocks",),
+    )
+
+    assert praw_calls == ["AAPL"]
+    assert [p["id"] for p in posts] == ["p1"]

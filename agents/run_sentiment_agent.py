@@ -55,12 +55,12 @@ def main():
 
     cfg = load_settings()
 
-    missing = cfg.missing("finnhub", "reddit", "llm")
+    # Reddit credentials are optional: without them the social fetch falls
+    # back to Reddit's no-auth JSON endpoint (backend="auto").
+    missing = cfg.missing("finnhub", "llm")
     if missing:
         print("Missing config in .env:", ", ".join(missing))
         sys.exit(1)
-
-    client_id, client_secret, reddit_user_agent = cfg.require_reddit()
 
     print(f"[1/3] FinnHub news for {ticker} ...", flush=True)
     news = fetch_company_news(
@@ -74,9 +74,9 @@ def main():
     social = fetch_reddit_posts(
         ticker=ticker,
         cutoff_timestamp=cutoff_timestamp,
-        client_id=client_id,
-        client_secret=client_secret,
-        user_agent=reddit_user_agent,
+        client_id=cfg.reddit_client_id,
+        client_secret=cfg.reddit_client_secret,
+        user_agent=cfg.reddit_user_agent,
         cache_dir=DEFAULT_POSTS_CACHE,
     )
 

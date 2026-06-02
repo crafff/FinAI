@@ -1,5 +1,7 @@
 import hashlib
 import json
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -14,6 +16,11 @@ DEFAULT_SUBREDDITS = (
     "wallstreetbets",
     "StockMarket",
 )
+
+# User-Agent sent on the no-auth JSON requests. Reddit throttles/blocks
+# requests with a generic or empty UA, so this is used when the caller did
+# not configure REDDIT_USER_AGENT.
+DEFAULT_USER_AGENT = "finai-research/0.1 (academic; no-auth json)"
 
 # Where the on-disk cache lives by default. Callers pass
 # cache_dir=DEFAULT_POSTS_CACHE to turn caching on; tests pass tmp_path.
@@ -140,13 +147,14 @@ def sort_posts_newest_first(posts):
 def fetch_reddit_posts(
     ticker,
     cutoff_timestamp,
-    client_id,
-    client_secret,
-    user_agent,
+    client_id=None,
+    client_secret=None,
+    user_agent=None,
     query=None,
     subreddits=DEFAULT_SUBREDDITS,
     limit=50,
     cache_dir=None,
+    backend="auto",
 ):
     """
     Fetch Reddit posts about a company and filter them to prevent leakage.
@@ -155,7 +163,10 @@ def fetch_reddit_posts(
         ticker:          stock ticker, e.g. "AAPL".
         cutoff_timestamp: the T0 close timestamp from t0_logic.
         client_id / client_secret / user_agent:
-                         Reddit API (PRAW) credentials.
+                         Reddit API (PRAW) credentials. client_id /
+                         client_secret are only needed for the "praw"
+                         backend; user_agent is sent on the no-auth "json"
+                         backend too (recommended, but defaulted if unset).
         query:           search query; defaults to the ticker symbol.
         subreddits:      finance subreddits to search.
         limit:           max submissions per subreddit.
@@ -165,12 +176,21 @@ def fetch_reddit_posts(
                          calling the Reddit API (which is rate limited).
                          Pass DEFAULT_POSTS_CACHE in production; None
                          disables caching (used by tests / offline paths).
+        backend:         "praw"  - authenticated PRAW (needs client_id +
+                                   client_secret);
+                         "json"  - Reddit's public no-auth search.json
+                                   endpoint (no credentials needed);
+                         "auto"  - PRAW when both credentials are present,
+                                   otherwise the no-auth JSON endpoint.
 
     Output:
         list of post dicts published at or before the cutoff, newest-first.
     """
     cutoff_timestamp = to_ny_time(cutoff_timestamp)
     search_query = query or ticker
+
+    if backend == "auto":
+        backend = "praw" if (client_id and client_secret) else "json"
 
     # The cache stores the RAW search results (plain dicts), which is what
     # costs API quota. The cutoff filter and sort are reapplied on every
@@ -186,10 +206,16 @@ def fetch_reddit_posts(
         )
 
     if raw_posts is None:
-        raw_posts = _reddit_search(
-            search_query, subreddits, limit,
-            client_id, client_secret, user_agent,
-        )
+        if backend == "json":
+            raw_posts = _reddit_search_json(
+                search_query, subreddits, limit,
+                user_agent or DEFAULT_USER_AGENT,
+            )
+        else:
+            raw_posts = _reddit_search(
+                search_query, subreddits, limit,
+                client_id, client_secret, user_agent,
+            )
 
         if cache_dir is not None:
             _write_posts_cache(
@@ -243,6 +269,58 @@ def _raw_value(submission, field):
         return str(value)
 
     return value
+
+
+def _http_get_json(url, user_agent):
+    """
+    Single HTTP boundary for the no-auth JSON backend. Tests monkeypatch
+    this. Returns the parsed JSON body of a GET request.
+    """
+    request = urllib.request.Request(url, headers={"User-Agent": user_agent})
+
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _reddit_search_json(query, subreddits, limit, user_agent):
+    """
+    No-auth network boundary: Reddit's public search.json endpoint.
+
+    Searches each subreddit via https://www.reddit.com/r/<sub>/search.json
+    and maps the response to the same raw dict shape `_reddit_search`
+    returns (the `_RAW_FIELDS` format_post reads), so the cache, cutoff
+    filter, and sort downstream are identical regardless of backend.
+
+    Requires no API credentials. Reddit rate-limits unauthenticated
+    requests, so this is best paired with cache_dir. A subreddit that
+    errors (rate limit, private, network) is skipped rather than aborting
+    the whole run.
+    """
+    raw_posts = []
+
+    for subreddit_name in subreddits:
+        params = urllib.parse.urlencode({
+            "q": query,
+            "restrict_sr": "1",
+            "sort": "new",
+            "limit": limit,
+        })
+        url = f"https://www.reddit.com/r/{subreddit_name}/search.json?{params}"
+
+        try:
+            payload = _http_get_json(url, user_agent)
+        except Exception:  # noqa: BLE001 - one bad subreddit must not abort
+            continue
+
+        children = (payload.get("data", {}) or {}).get("children", []) or []
+
+        for child in children:
+            data = child.get("data", {}) or {}
+            raw_posts.append({
+                field: data.get(field) for field in _RAW_FIELDS
+            })
+
+    return raw_posts
 
 
 def _atomic_write(path, content):
