@@ -31,17 +31,15 @@ def run_rebuttal_loop(state: dict, client: LLMClient) -> dict:
     """
     Run the red-team rebuttal loop in place on `state`.
 
-    Reads from state: `ticker`, `fundamental_report`, `sentiment_report`,
-    `risk_assessment`, `baseline_price`, and the standing prediction
+    Reads from state: `ticker`, `subtask_reports_rendered` (the name->rendered
+    evidence map), `baseline_price`, and the standing prediction
     (`leader_prediction`). Mutates: `rebuttals`, `leader_responses`,
     `round_count`, `converged`, and finally `final_prediction`.
 
     Returns the same state object for convenience.
     """
     ticker = state["ticker"]
-    fundamental_report = state["fundamental_report"]
-    sentiment_report = state["sentiment_report"]
-    risk_assessment = state["risk_assessment"]
+    reports = state["subtask_reports_rendered"]
     baseline_price = state.get("baseline_price")
 
     prediction = current_prediction(state)
@@ -52,9 +50,7 @@ def run_rebuttal_loop(state: dict, client: LLMClient) -> dict:
         rebuttal = run_redteam_agent(
             ticker=ticker,
             prediction=prediction,
-            fundamental_report=fundamental_report,
-            sentiment_report=sentiment_report,
-            risk_assessment=risk_assessment,
+            reports=reports,
             client=client,
             round=round,
             baseline_price=baseline_price,
@@ -65,9 +61,7 @@ def run_rebuttal_loop(state: dict, client: LLMClient) -> dict:
             ticker=ticker,
             current_prediction=prediction,
             rebuttal=rebuttal,
-            fundamental_report=fundamental_report,
-            sentiment_report=sentiment_report,
-            risk_assessment=risk_assessment,
+            reports=reports,
             client=client,
             round=round,
             baseline_price=baseline_price,

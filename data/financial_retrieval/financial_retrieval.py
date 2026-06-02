@@ -7,7 +7,7 @@ FMP_BASE_URL = "https://financialmodelingprep.com/stable"
 
 # Where the on-disk cache lives by default. Callers pass
 # cache_dir=DEFAULT_FINANCIALS_CACHE to turn caching on; tests pass tmp_path.
-DEFAULT_FINANCIALS_CACHE = Path(__file__).parent / "cache"
+DEFAULT_FINANCIALS_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "financials"
 
 # The four statement endpoints fetched together, in this order.
 _ENDPOINTS = (

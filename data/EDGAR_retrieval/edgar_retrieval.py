@@ -17,6 +17,10 @@ SEC_ARCHIVES_URL = (
 
 SEC_MIN_REQUEST_INTERVAL_SECONDS = 0.11
 
+# Where the on-disk 10-K cache lives by default. Callers pass
+# cache_dir=DEFAULT_FILING_CACHE to turn caching on; tests pass tmp_path.
+DEFAULT_FILING_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "edgar"
+
 DOW_30 = [
     "AAPL", "AMGN", "AMZN", "AXP", "BA",
     "CAT", "CRM", "CSCO", "CVX", "DIS",

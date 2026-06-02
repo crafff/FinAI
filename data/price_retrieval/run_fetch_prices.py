@@ -23,11 +23,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "t0_logic"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "EDGAR_retrieval"))
 
-from price_retrieval import fetch_prices  # noqa: E402
+from price_retrieval import DEFAULT_PRICES_CACHE, fetch_prices  # noqa: E402
 from t0_logic import compute_t0  # noqa: E402
-from edgar_retrieval import parse_acceptance_datetime  # noqa: E402
+from edgar_retrieval import DEFAULT_FILING_CACHE, parse_acceptance_datetime  # noqa: E402
 
-EDGAR_CACHE = Path(__file__).parent.parent / "EDGAR_retrieval" / "cache"
+EDGAR_CACHE = DEFAULT_FILING_CACHE
 
 
 def _discover_filings():
@@ -74,6 +74,7 @@ def main():
                 ticker,
                 dates["t0_date"],
                 dates["target_date"],
+                cache_dir=DEFAULT_PRICES_CACHE,
             )
 
             print(

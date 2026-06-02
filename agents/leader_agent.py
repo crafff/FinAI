@@ -133,21 +133,22 @@ def build_risk_evidence(risk_assessment: dict) -> dict:
 
 def build_user_prompt(
     ticker: str,
-    fundamental_report: dict,
-    sentiment_report: dict,
-    risk_assessment: dict,
+    reports: dict[str, dict],
     baseline_price: float | None,
 ) -> str:
     """
-    Compose the initial user message: the three rendered subtask reports in
-    one payload, plus the baseline anchor and the task.
+    Compose the initial user message: the subtask reports (an arbitrary
+    name->rendered-evidence map) in one payload, plus the baseline anchor and
+    the task.
+
+    `reports` is already rendered by the caller (the experiment registry uses
+    the `build_*_evidence` renderers below), so the Leader is agnostic to
+    which or how many subtask agents ran.
     """
     payload = {
         "ticker": ticker.upper(),
         "baseline_price": baseline_price,
-        "fundamental_report": build_fundamental_evidence(fundamental_report),
-        "sentiment_report": build_sentiment_evidence(sentiment_report),
-        "risk_assessment": build_risk_evidence(risk_assessment),
+        "subtask_reports": reports,
     }
 
     baseline_note = (
@@ -188,9 +189,7 @@ def risk_assessment_from_score(score: RiskScore) -> RiskAssessment:
 
 def run_leader_agent(
     ticker: str,
-    fundamental_report: dict,
-    sentiment_report: dict,
-    risk_assessment: dict,
+    reports: dict[str, dict],
     client: LLMClient,
     baseline_price: float | None = None,
 ) -> Prediction:
@@ -198,26 +197,18 @@ def run_leader_agent(
     Run the Leader aggregation agent end to end.
 
     Inputs:
-        ticker:             stock ticker.
-        fundamental_report: Task 10 FundamentalReport.
-        sentiment_report:   Task 11 SentimentReport.
-        risk_assessment:    Task 14 RiskAssessment (or the interim
-                            qualitative-only one from
-                            `risk_assessment_from_score`).
-        client:             an LLMClient (Anthropic or local).
-        baseline_price:     the T0 close, used to anchor the target price.
+        ticker:         stock ticker.
+        reports:        a name->rendered-evidence map of the subtask outputs
+                        (e.g. {"fundamental": ..., "sentiment": ...,
+                        "qualitative_risk": ...}). Any subset/number works.
+        client:         an LLMClient (Anthropic or local).
+        baseline_price: the T0 close, used to anchor the target price.
 
     Returns the Leader's initial Prediction (leader_prediction).
     """
     messages = [{
         "role": "user",
-        "text": build_user_prompt(
-            ticker,
-            fundamental_report,
-            sentiment_report,
-            risk_assessment,
-            baseline_price,
-        ),
+        "text": build_user_prompt(ticker, reports, baseline_price),
     }]
 
     response = client.complete(messages, tools=None, system=SYSTEM_PROMPT)
@@ -274,14 +265,12 @@ def build_response_user_prompt(
     ticker: str,
     current_prediction: dict,
     rebuttal: dict,
-    fundamental_report: dict,
-    sentiment_report: dict,
-    risk_assessment: dict,
+    reports: dict[str, dict],
     baseline_price: float | None,
 ) -> str:
     """
     Compose the Leader's rebuttal-reply prompt: the standing prediction, the
-    red-team rebuttal, and the same reports, in one payload.
+    red-team rebuttal, and the same subtask reports, in one payload.
     """
     payload = {
         "ticker": ticker.upper(),
@@ -293,9 +282,7 @@ def build_response_user_prompt(
             "objections": rebuttal.get("objections"),
             "severity": rebuttal.get("severity"),
         },
-        "fundamental_report": build_fundamental_evidence(fundamental_report),
-        "sentiment_report": build_sentiment_evidence(sentiment_report),
-        "risk_assessment": build_risk_evidence(risk_assessment),
+        "subtask_reports": reports,
     }
 
     return (
@@ -350,9 +337,7 @@ def run_leader_response(
     ticker: str,
     current_prediction: dict,
     rebuttal: dict,
-    fundamental_report: dict,
-    sentiment_report: dict,
-    risk_assessment: dict,
+    reports: dict[str, dict],
     client: LLMClient,
     round: int,
     baseline_price: float | None = None,
@@ -360,6 +345,7 @@ def run_leader_response(
     """
     Run the Leader's reply to one red-team rebuttal (Task 17).
 
+    `reports` is the same name->rendered-evidence map the Leader aggregated.
     Returns a LeaderResponse: `accepted=True` with a `revised_prediction`
     means the Leader took the objection and revised; `accepted=False` with
     `revised_prediction=None` means it held its position.
@@ -370,9 +356,7 @@ def run_leader_response(
             ticker,
             current_prediction,
             rebuttal,
-            fundamental_report,
-            sentiment_report,
-            risk_assessment,
+            reports,
             baseline_price,
         ),
     }]

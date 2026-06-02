@@ -1,0 +1,22 @@
+# Full three-way ablation over the entire Dow Jones 30.
+# `ticker_set: dow30` expands to the 30 constituents (see edgar_retrieval.DOW_30).
+# Make sure their 10-Ks are cached first: data/EDGAR_retrieval/run_fetch.py
+name: ablation_dow30
+
+ticker_set: dow30
+seed: 42
+
+# Degrade missing financials/news/social to empty instead of skipping the
+# whole ticker (handy when the FMP free tier 402s on some symbols). The 10-K
+# and prices stay required.
+allow_missing: true
+
+systems:
+  - {name: single, mode: single}
+  - name: full
+    mode: leader
+    subtasks: [fundamental, sentiment, qualitative_risk]
+    red_team: true
+    max_rounds: 3
+  - {name: full_no_redteam, mode: leader,
+     subtasks: [fundamental, sentiment, qualitative_risk], red_team: false}

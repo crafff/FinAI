@@ -6,6 +6,11 @@ import numpy as np
 
 
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
+
+# Where the on-disk RAG index cache lives by default. Callers pass
+# cache_dir=DEFAULT_INDEX_CACHE to turn caching on; tests pass tmp_path.
+DEFAULT_INDEX_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "rag"
+
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_CHUNK_OVERLAP = 150
 MIN_SECTION_CHARS = 200

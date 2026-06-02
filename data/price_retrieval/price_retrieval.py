@@ -1,4 +1,11 @@
-from datetime import date, timedelta
+import json
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+
+# Where the on-disk price cache lives by default. Callers pass
+# cache_dir=DEFAULT_PRICES_CACHE to turn caching on; tests pass tmp_path.
+DEFAULT_PRICES_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "prices"
 
 
 def get_close_on_date(close_series, target_date):
@@ -84,7 +91,70 @@ def _download_close_series(ticker, start_date, end_date):
     return series
 
 
-def fetch_prices(ticker, t0_date, target_date, trend_days=30):
+def _atomic_write(path, content):
+    """
+    Write content to path via a temporary file + rename, so partial writes
+    from interrupted runs do not corrupt the cache.
+    """
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    tmp_path.replace(path)
+
+
+def _prices_cache_path(cache_dir, ticker, t0_date, target_date, trend_days):
+    """
+    Cache file for one price request:
+    <cache_dir>/<TICKER>/<t0>_<target>_t<trend_days>.json
+    """
+    name = f"{t0_date.isoformat()}_{target_date.isoformat()}_t{trend_days}.json"
+    return Path(cache_dir) / ticker.upper() / name
+
+
+def _read_prices_cache(cache_dir, ticker, t0_date, target_date, trend_days):
+    """
+    Return the cached close series (date -> float) for this request, or None
+    if absent. Date keys are stored as ISO strings and rehydrated here.
+    """
+    path = _prices_cache_path(cache_dir, ticker, t0_date, target_date, trend_days)
+
+    if not path.exists():
+        return None
+
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    raw = payload.get("raw", {})
+
+    return {date.fromisoformat(k): float(v) for k, v in raw.items()}
+
+
+def _write_prices_cache(
+    cache_dir, ticker, t0_date, target_date, trend_days, close_series
+):
+    """
+    Atomically persist the raw downloaded close series for this request.
+    The close series is the unit that costs a yfinance download; the
+    baseline / target / trend are cheap to re-derive on read.
+    """
+    path = _prices_cache_path(cache_dir, ticker, t0_date, target_date, trend_days)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = {
+        "ticker": ticker.upper(),
+        "t0_date": t0_date.isoformat(),
+        "target_date": target_date.isoformat(),
+        "trend_days": trend_days,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "raw": {d.isoformat(): v for d, v in close_series.items()},
+    }
+
+    _atomic_write(path, json.dumps(payload, indent=2))
+
+
+def fetch_prices(ticker, t0_date, target_date, trend_days=30, cache_dir=None):
     """
     Fetch the baseline price, target price, and pre-release trend for one
     company around its filing.
@@ -94,6 +164,12 @@ def fetch_prices(ticker, t0_date, target_date, trend_days=30):
         t0_date:       T0 date from t0_logic.compute_t0.
         target_date:   5th-trading-day date from t0_logic.compute_t0.
         trend_days:    how many trailing trading days of trend to return.
+        cache_dir:     optional directory for an on-disk cache. When set, a
+                       repeated (ticker, t0, target, trend_days) request is
+                       served from disk instead of re-downloading from
+                       yfinance. Pass DEFAULT_PRICES_CACHE in production;
+                       None disables caching (tests / offline). Mirrors the
+                       EDGAR / FinnHub cache convention.
 
     Output dict:
         ticker
@@ -112,7 +188,24 @@ def fetch_prices(ticker, t0_date, target_date, trend_days=30):
     lookback_calendar_days = trend_days * 2 + 10
     start_date = t0_date - timedelta(days=lookback_calendar_days)
 
-    close_series = _download_close_series(ticker, start_date, target_date)
+    # The cache stores the RAW downloaded close series (what costs the
+    # network round-trip). The baseline/target/trend are re-derived on every
+    # read. An empty result is never cached, so a transient failure is not
+    # persisted.
+    close_series = None
+
+    if cache_dir is not None:
+        close_series = _read_prices_cache(
+            cache_dir, ticker, t0_date, target_date, trend_days
+        )
+
+    if not close_series:
+        close_series = _download_close_series(ticker, start_date, target_date)
+
+        if cache_dir is not None and close_series:
+            _write_prices_cache(
+                cache_dir, ticker, t0_date, target_date, trend_days, close_series
+            )
 
     baseline_price = get_close_on_date(close_series, t0_date)
     target_price = get_close_on_date(close_series, target_date)

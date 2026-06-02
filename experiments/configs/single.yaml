@@ -1,0 +1,12 @@
+# Just the single-agent baseline, over one or more tickers.
+name: single_baseline
+tickers: dow30
+
+# Optional. Default false. When true, a ticker whose financials (FMP) / news
+# (FinnHub) / social (Reddit) can't be fetched degrades that source to empty
+# and keeps going, instead of skipping the whole ticker. The 10-K and prices
+# stay required. Handy when the FMP free tier 402s on some symbols.
+allow_missing: true
+
+systems:
+  - {name: single, mode: single}

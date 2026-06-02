@@ -150,21 +150,25 @@ revision. The surviving prediction is written to `final_prediction`. This is
 the exact control flow Item 18 (LangGraph) will wrap — each `run_*` a node,
 the loop guard a conditional edge.
 
-## `run_full_agent.py` — full coopetition pipeline (ablation variant "full")
+## Standalone runners (thin wrappers over the experiment harness)
 
-Wires Stage 1 → Leader → red-team loop end to end on a `PipelineState`,
-seeding the data/Stage-1 keys and projecting the finished run with
-`to_ablation_record` (→ `full_direction` / `full_target_price`). Saves the
-full transcript plus the three reports, `rebuttals.json`,
-`leader_responses.json`, `final_prediction.json`, and `ablation_record.json`.
+`run_single_agent.py`, `run_leader_agent.py`, and `run_full_agent.py` are
+convenience wrappers that run one ticker through one system configuration via
+the experiment harness (`experiments/`), which owns all the data loading,
+pipeline wiring, and result saving:
 
 ```bash
-uv run --extra rag python agents/run_full_agent.py AAPL
+uv run --extra rag python agents/run_single_agent.py AAPL   # single-agent baseline
+uv run --extra rag python agents/run_leader_agent.py AAPL   # Stage-1 -> Leader (no red-team)
+uv run --extra rag python agents/run_full_agent.py  AAPL    # full system + red-team loop
 ```
 
-Risk input is still the qualitative-only stand-in
-(`risk_assessment_from_score`); swapping in Task 14's `RiskAssessment` is the
-same one-line change as in `run_leader_agent.py`.
+Each writes a `runs/<name>/` tree (transcript, sub-task reports,
+final_prediction, ablation record, metrics). For the three-way ablation or
+multi-ticker sweeps, use `experiments/run_experiment.py` with a YAML config
+(see `experiments/README.md`). Risk input is still the qualitative-only
+stand-in (`risk_assessment_from_score`); swapping in Task 14's `RiskAssessment`
+is a one-line change in `experiments/registry.py`.
 
 ## Tests
 

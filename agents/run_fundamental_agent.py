@@ -44,8 +44,8 @@ from llm_client import LLMClient  # noqa: E402
 from fundamental_agent import run_fundamental_agent  # noqa: E402
 from transcript import TranscriptRecorder, new_run_dir  # noqa: E402
 
-EDGAR_CACHE = ROOT / "data" / "EDGAR_retrieval" / "cache"
-RAG_CACHE = ROOT / "data" / "rag_10k" / "cache"
+EDGAR_CACHE = ROOT / ".cache" / "edgar"
+RAG_CACHE = ROOT / ".cache" / "rag"
 
 
 def _find_cached_filing(ticker):

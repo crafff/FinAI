@@ -1,0 +1,14 @@
+# Just the full coopetition system, over one or more tickers.
+name: full_system
+tickers: dow30
+
+# Optional. Default false. When true, missing financials/news/social degrade
+# to empty instead of skipping the whole ticker (10-K + prices stay required).
+allow_missing: true
+
+systems:
+  - name: full
+    mode: leader
+    subtasks: [fundamental, sentiment, qualitative_risk]
+    red_team: true
+    max_rounds: 3

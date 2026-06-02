@@ -19,11 +19,14 @@ import sys
 import time
 from pathlib import Path
 
-from rag_10k import DEFAULT_MODEL, build_or_load_index
+from rag_10k import DEFAULT_INDEX_CACHE, DEFAULT_MODEL, build_or_load_index
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "EDGAR_retrieval"))
+from edgar_retrieval import DEFAULT_FILING_CACHE  # noqa: E402
 
 
-EDGAR_CACHE = Path(__file__).parent.parent / "EDGAR_retrieval" / "cache"
-RAG_CACHE = Path(__file__).parent / "cache"
+EDGAR_CACHE = DEFAULT_FILING_CACHE
+RAG_CACHE = DEFAULT_INDEX_CACHE
 
 
 def _discover_filings():

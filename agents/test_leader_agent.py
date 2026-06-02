@@ -1,13 +1,26 @@
 from llm_client import LLMResponse
 from schemas import BUY, NOT_BUY, LeaderResponse, RiskAssessment, RiskScore, missing_keys
 from leader_agent import (
+    build_fundamental_evidence,
     build_risk_evidence,
+    build_sentiment_evidence,
     build_user_prompt,
     parse_leader_response,
     risk_assessment_from_score,
     run_leader_agent,
     run_leader_response,
 )
+
+
+def _reports(risk=None):
+    """Rendered name->evidence map, as the experiment registry builds it."""
+    if risk is None:
+        risk = risk_assessment_from_score(_qual_score())
+    return {
+        "fundamental": build_fundamental_evidence(_fundamental_report()),
+        "sentiment": build_sentiment_evidence(_sentiment_report()),
+        "qualitative_risk": build_risk_evidence(risk),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -94,9 +107,7 @@ def test_build_risk_evidence_renders_one_and_two_scores():
 def test_build_user_prompt_includes_all_three_reports_and_baseline():
     prompt = build_user_prompt(
         "AAPL",
-        _fundamental_report(),
-        _sentiment_report(),
-        risk_assessment_from_score(_qual_score()),
+        _reports(),
         baseline_price=180.0,
     )
 
@@ -135,9 +146,7 @@ def test_run_leader_agent_aggregates_and_predicts():
 
     pred = run_leader_agent(
         ticker="AAPL",
-        fundamental_report=_fundamental_report(),
-        sentiment_report=_sentiment_report(),
-        risk_assessment=risk_assessment_from_score(_qual_score()),
+        reports=_reports(),
         client=client,
         baseline_price=180.0,
     )
@@ -164,9 +173,7 @@ def test_swapping_in_two_score_assessment_is_a_noop():
 
     pred = run_leader_agent(
         ticker="AAPL",
-        fundamental_report=_fundamental_report(),
-        sentiment_report=_sentiment_report(),
-        risk_assessment=two_score,
+        reports=_reports(risk=two_score),
         client=client,
         baseline_price=180.0,
     )
@@ -198,9 +205,7 @@ def _leader_response_args(client):
             "risk_reconciliation": "y",
         },
         rebuttal=_rebuttal(),
-        fundamental_report=_fundamental_report(),
-        sentiment_report=_sentiment_report(),
-        risk_assessment=risk_assessment_from_score(_qual_score()),
+        reports=_reports(),
         client=client,
         round=1,
         baseline_price=180.0,

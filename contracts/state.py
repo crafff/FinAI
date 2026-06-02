@@ -78,6 +78,13 @@ class PipelineState(TypedDict, total=False):
     sentiment_report: SentimentReport
     risk_assessment: RiskAssessment
 
+    # Generalized subtask outputs for the configurable experiment harness:
+    # an arbitrary {agent_name: report} map plus the {agent_name: rendered
+    # evidence} the Leader / red-team actually consume. These supersede the
+    # three fixed keys above when running with a configurable subtask set.
+    subtask_reports: dict          # {name: raw report}, for artifacts/audit
+    subtask_reports_rendered: dict  # {name: rendered evidence}, fed to agents
+
     # --- Stage 2 aggregation (Task 15) ---
     leader_prediction: Prediction
 

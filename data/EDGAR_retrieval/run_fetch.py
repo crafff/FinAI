@@ -21,11 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "config"))
 
-from edgar_retrieval import DOW_30, fetch_10k
+from edgar_retrieval import DEFAULT_FILING_CACHE, DOW_30, fetch_10k
 from settings import MissingConfigError, load_settings  # noqa: E402
 
 
-CACHE_DIR = Path(__file__).parent / "cache"
+CACHE_DIR = DEFAULT_FILING_CACHE
 
 
 def main():

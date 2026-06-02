@@ -9,7 +9,7 @@ UTC_TZ = ZoneInfo("UTC")
 
 # Where the on-disk cache lives by default. Callers (pipeline / runners)
 # pass cache_dir=DEFAULT_NEWS_CACHE to turn caching on; tests pass tmp_path.
-DEFAULT_NEWS_CACHE = Path(__file__).parent / "cache"
+DEFAULT_NEWS_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "finnhub"
 
 
 def to_ny_time(ts: datetime) -> datetime:

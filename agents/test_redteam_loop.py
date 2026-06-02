@@ -1,5 +1,4 @@
 from llm_client import LLMResponse
-from schemas import RiskAssessment, RiskScore
 from state import new_state
 from redteam_loop import run_rebuttal_loop
 
@@ -50,18 +49,17 @@ _HOLD_JSON = (
 def _seed_state(max_rounds=3):
     state = new_state("AAPL", variant="full", max_rounds=max_rounds)
     state["baseline_price"] = 180.0
-    state["fundamental_report"] = {"summary": "Strong.", "signal": "bullish",
-                                   "confidence": 0.7, "key_metrics": {},
-                                   "citations": []}
-    state["sentiment_report"] = {"summary": "Mixed.", "signal": "mixed",
-                                 "confidence": 0.5, "news_count": 1,
-                                 "social_count": 0, "disagreement": True,
-                                 "citations": []}
-    state["risk_assessment"] = RiskAssessment(
-        collected_factors=["litigation"],
-        scores=[RiskScore(method="qualitative", score=6.0, summary="s",
-                          factors=["litigation"], justification="j")],
-    )
+    state["subtask_reports_rendered"] = {
+        "fundamental": {"summary": "Strong.", "signal": "bullish",
+                        "confidence": 0.7, "key_metrics": {}, "citations": []},
+        "sentiment": {"summary": "Mixed.", "signal": "mixed", "confidence": 0.5,
+                      "news_count": 1, "social_count": 0, "disagreement": True,
+                      "citations": []},
+        "qualitative_risk": {"collected_factors": ["litigation"],
+                             "scores": [{"method": "qualitative", "score": 6.0,
+                                         "summary": "s", "factors": ["litigation"],
+                                         "justification": "j"}]},
+    }
     state["leader_prediction"] = {
         "direction": "Buy", "target_price": 192.0, "confidence": 0.66,
         "rationale": "Initial.", "dominant_signal": "fundamentals",

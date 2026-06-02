@@ -28,6 +28,8 @@ dependencies = [
     # (OpenAI-compatible) via the openai SDK
     "anthropic",
     "openai",
+    # experiment harness configs (Task 19)
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
@@ -61,6 +63,7 @@ testpaths = [
     "config",
     "agents",
     "evaluation",
+    "experiments",
 ]
 # Make every module importable by bare name so cross-module tests work
 # without per-file sys.path manipulation.
@@ -76,4 +79,5 @@ pythonpath = [
     "config",
     "agents",
     "evaluation",
+    "experiments",
 ]

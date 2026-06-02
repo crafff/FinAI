@@ -1,0 +1,34 @@
+# Three-way ablation (+ extra cuts), the headline experiment.
+# Runs every system on every ticker and computes pairwise significance.
+name: ablation_v1
+
+tickers: [AAPL, MSFT, NVDA]      # or: tickers_file: experiments/configs/tickers.txt
+
+# model: claude-opus-4-8         # optional; defaults to .env LLM_MODEL
+seed: 42                          # makes the bootstrap comparison reproducible
+# allow_missing: true            # degrade missing financials/news/social to empty
+#                                # instead of skipping the ticker (default false)
+
+systems:
+  # Single-agent baseline: one agent sees all evidence and predicts.
+  - {name: single, mode: single}
+
+  # Full system: all sub-task agents + leader + red-team loop (cap 3).
+  - name: full
+    mode: leader
+    subtasks: [fundamental, sentiment, qualitative_risk]
+    red_team: true
+    max_rounds: 3
+
+  # Ablation: full sub-tasks + leader, but NO red-team loop.
+  - name: full_no_redteam
+    mode: leader
+    subtasks: [fundamental, sentiment, qualitative_risk]
+    red_team: false
+
+  # Ablation: fundamentals only, single rebuttal round.
+  - name: fundamentals_only
+    mode: leader
+    subtasks: [fundamental]
+    red_team: true
+    max_rounds: 1

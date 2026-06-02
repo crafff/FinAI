@@ -104,6 +104,53 @@ def test_fetch_prices_integration(monkeypatch):
     assert captured["end_date"] == target
 
 
+def test_fetch_prices_cache_serves_second_call_from_disk(tmp_path, monkeypatch):
+    t0 = date(2026, 2, 3)
+    target = date(2026, 2, 10)
+    series = make_series(date(2026, 1, 1), 50)
+
+    calls = {"n": 0}
+
+    def fake_download(ticker, start_date, end_date):
+        calls["n"] += 1
+        return series
+
+    monkeypatch.setattr(price_retrieval, "_download_close_series", fake_download)
+
+    first = fetch_prices("AAPL", t0, target, trend_days=10, cache_dir=tmp_path)
+    assert calls["n"] == 1
+
+    # Second identical call is served from disk: no further download, equal result.
+    second = fetch_prices("AAPL", t0, target, trend_days=10, cache_dir=tmp_path)
+    assert calls["n"] == 1
+    assert second["baseline_price"] == first["baseline_price"]
+    assert second["target_price"] == first["target_price"]
+    assert [p["date"] for p in second["pre_release_trend"]] == \
+        [p["date"] for p in first["pre_release_trend"]]
+
+    cache_file = tmp_path / "AAPL" / f"{t0.isoformat()}_{target.isoformat()}_t10.json"
+    assert cache_file.exists()
+
+
+def test_fetch_prices_no_cache_dir_downloads_every_call(monkeypatch):
+    t0 = date(2026, 2, 3)
+    target = date(2026, 2, 10)
+    series = make_series(date(2026, 1, 1), 50)
+
+    calls = {"n": 0}
+
+    def fake_download(ticker, start_date, end_date):
+        calls["n"] += 1
+        return series
+
+    monkeypatch.setattr(price_retrieval, "_download_close_series", fake_download)
+
+    fetch_prices("AAPL", t0, target, trend_days=10)
+    fetch_prices("AAPL", t0, target, trend_days=10)
+
+    assert calls["n"] == 2
+
+
 def test_fetch_prices_missing_target_raises(monkeypatch):
     t0 = date(2026, 2, 3)
     target = date(2026, 2, 10)

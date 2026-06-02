@@ -19,13 +19,7 @@ from __future__ import annotations
 from llm_client import LLMClient
 from schemas import Rebuttal
 
-# Reuse the leader's report compactors so the red team sees exactly what the
-# Leader saw, and the same lenient JSON extractor.
-from leader_agent import (
-    build_fundamental_evidence,
-    build_risk_evidence,
-    build_sentiment_evidence,
-)
+# Same lenient JSON extractor the other agents use.
 from sentiment_agent import extract_json_object
 
 
@@ -66,14 +60,12 @@ these fields:
 def build_user_prompt(
     ticker: str,
     prediction: dict,
-    fundamental_report: dict,
-    sentiment_report: dict,
-    risk_assessment: dict,
+    reports: dict[str, dict],
     baseline_price: float | None,
 ) -> str:
     """
-    Compose the red-team prompt: the prediction under attack plus the three
-    reports rendered exactly as the Leader saw them.
+    Compose the red-team prompt: the prediction under attack plus the subtask
+    reports (the same name->rendered-evidence map the Leader saw).
     """
     import json
 
@@ -81,9 +73,7 @@ def build_user_prompt(
         "ticker": ticker.upper(),
         "baseline_price": baseline_price,
         "prediction_under_review": prediction,
-        "fundamental_report": build_fundamental_evidence(fundamental_report),
-        "sentiment_report": build_sentiment_evidence(sentiment_report),
-        "risk_assessment": build_risk_evidence(risk_assessment),
+        "subtask_reports": reports,
     }
 
     return (
@@ -124,9 +114,7 @@ def parse_rebuttal(text: str, round: int) -> Rebuttal:
 def run_redteam_agent(
     ticker: str,
     prediction: dict,
-    fundamental_report: dict,
-    sentiment_report: dict,
-    risk_assessment: dict,
+    reports: dict[str, dict],
     client: LLMClient,
     round: int,
     baseline_price: float | None = None,
@@ -135,13 +123,12 @@ def run_redteam_agent(
     Run the red-team agent for one round.
 
     Inputs:
-        ticker:             stock ticker.
-        prediction:         the Leader's current Prediction under attack.
-        fundamental_report / sentiment_report / risk_assessment:
-                            the Stage-1 reports (same as the Leader saw).
-        client:             an LLMClient (Anthropic or local).
-        round:              1-based round number, stamped on the Rebuttal.
-        baseline_price:     the T0 close (context only).
+        ticker:         stock ticker.
+        prediction:     the Leader's current Prediction under attack.
+        reports:        the same name->rendered-evidence map the Leader saw.
+        client:         an LLMClient (Anthropic or local).
+        round:          1-based round number, stamped on the Rebuttal.
+        baseline_price: the T0 close (context only).
 
     Returns a Rebuttal for this round.
     """
@@ -150,9 +137,7 @@ def run_redteam_agent(
         "text": build_user_prompt(
             ticker,
             prediction,
-            fundamental_report,
-            sentiment_report,
-            risk_assessment,
+            reports,
             baseline_price,
         ),
     }]

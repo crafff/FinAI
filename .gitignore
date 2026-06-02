@@ -10,12 +10,8 @@ venv/
 .env.*
 !.env.example
 
-# Data caches
-data/EDGAR_retrieval/cache/
-data/rag_10k/cache/
-data/FinnHub_retrieval/cache/
-data/financial_retrieval/cache/
-data/reddit_retrieval/cache/
+# Data caches (centralized)
+.cache/
 
 # Agent run artifacts (transcripts / reports)
 runs/

@@ -28,8 +28,8 @@ from transcript import TranscriptRecorder, new_run_dir  # noqa: E402
 from qualitative_risk_agent import run_qualitative_risk_agent  # noqa: E402
 
 
-EDGAR_CACHE = ROOT / "data" / "EDGAR_retrieval" / "cache"
-RAG_CACHE = ROOT / "data" / "rag_10k" / "cache"
+EDGAR_CACHE = ROOT / ".cache" / "edgar"
+RAG_CACHE = ROOT / ".cache" / "rag"
 
 
 def _find_cached_filing(ticker):

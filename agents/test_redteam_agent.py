@@ -94,9 +94,11 @@ def test_run_redteam_agent_returns_contract_valid_rebuttal_without_tools():
     reb = run_redteam_agent(
         ticker="AAPL",
         prediction=_prediction(),
-        fundamental_report=_fundamental_report(),
-        sentiment_report=_sentiment_report(),
-        risk_assessment=_risk_assessment(),
+        reports={
+            "fundamental": _fundamental_report(),
+            "sentiment": _sentiment_report(),
+            "qualitative_risk": _risk_assessment(),
+        },
         client=client,
         round=1,
     )

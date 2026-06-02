@@ -267,6 +267,50 @@ def test_fetch_reddit_posts_no_cache_dir_always_calls_api(monkeypatch):
     assert len(call_log) == 2
 
 
+def test_fetch_reddit_posts_empty_result_not_cached_and_refetched(monkeypatch, tmp_path):
+    # An empty search (e.g. a transient 403 block) must not be cached as a
+    # sticky empty result: the next run refetches instead of being stuck.
+    cutoff = datetime(2025, 1, 2, 16, 0, tzinfo=NY)
+
+    call_log = []
+    _install_fake_search(monkeypatch, [], call_log)
+
+    first = fetch_reddit_posts(
+        "AAPL", cutoff, client_id="id", client_secret="s", user_agent="ua",
+        subreddits=("stocks",), cache_dir=tmp_path,
+    )
+    second = fetch_reddit_posts(
+        "AAPL", cutoff, client_id="id", client_secret="s", user_agent="ua",
+        subreddits=("stocks",), cache_dir=tmp_path,
+    )
+
+    assert first == [] and second == []
+    assert len(call_log) == 2                              # both refetched
+    # No empty cache file was written.
+    assert not _posts_cache_path(tmp_path, "AAPL", "AAPL", ("stocks",), 50).exists()
+
+
+def test_fetch_reddit_posts_ignores_preexisting_empty_cache(monkeypatch, tmp_path):
+    # A legacy empty cache entry (raw=[]) is treated as a miss and refetched;
+    # once real posts come back they are cached and reused.
+    from reddit_retrieval import _write_posts_cache
+
+    cutoff = datetime(2025, 1, 2, 16, 0, tzinfo=NY)
+    _write_posts_cache(tmp_path, "AAPL", "AAPL", ("stocks",), 50, [])  # stale empty
+
+    raw = [_raw_post("p1", make_unix_timestamp(2025, 1, 2, 12, 0))]
+    call_log = []
+    _install_fake_search(monkeypatch, raw, call_log)
+
+    result = fetch_reddit_posts(
+        "AAPL", cutoff, client_id="id", client_secret="s", user_agent="ua",
+        subreddits=("stocks",), cache_dir=tmp_path,
+    )
+
+    assert [p["id"] for p in result] == ["p1"]            # refetched, not stuck on empty
+    assert len(call_log) == 1
+
+
 # --------------------------------------------------------------------------
 # No-auth JSON backend
 # --------------------------------------------------------------------------

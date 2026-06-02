@@ -24,7 +24,7 @@ DEFAULT_USER_AGENT = "finai-research/0.1 (academic; no-auth json)"
 
 # Where the on-disk cache lives by default. Callers pass
 # cache_dir=DEFAULT_POSTS_CACHE to turn caching on; tests pass tmp_path.
-DEFAULT_POSTS_CACHE = Path(__file__).parent / "cache"
+DEFAULT_POSTS_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "reddit"
 
 # Submission fields captured at the network boundary. These are the names
 # format_post reads, so a cached raw dict feeds straight back through it.
@@ -205,7 +205,13 @@ def fetch_reddit_posts(
             cache_dir, ticker, search_query, subreddits, limit
         )
 
-    if raw_posts is None:
+    # An empty cached result is treated as a miss. An empty Reddit search is
+    # usually a transient block (e.g. HTTP 403 to the no-auth JSON endpoint
+    # from a datacenter IP) rather than a genuine "no posts", so we neither
+    # trust a cached empty list nor persist a freshly-fetched one. A later run
+    # - with credentials, or from an unblocked IP - therefore refetches
+    # instead of being stuck on an empty cache entry.
+    if not raw_posts:
         if backend == "json":
             raw_posts = _reddit_search_json(
                 search_query, subreddits, limit,
@@ -217,7 +223,7 @@ def fetch_reddit_posts(
                 client_id, client_secret, user_agent,
             )
 
-        if cache_dir is not None:
+        if cache_dir is not None and raw_posts:
             _write_posts_cache(
                 cache_dir, ticker, search_query, subreddits, limit, raw_posts
             )

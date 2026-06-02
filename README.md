@@ -42,8 +42,10 @@ RAG index), and running the Fundamental agent standalone.
 .
 ├── data/            # EDGAR, price, news, social retrieval + T0 logic
 ├── agents/          # subtask, leader, and red-team agents
+├── experiments/     # config-driven ablation harness (single/leader, multi-ticker)
 ├── orchestration/   # LangGraph state graph
 ├── evaluation/      # metrics, statistical tests, ablation experiments
+├── .cache/          # centralized on-disk data caches (gitignored)
 └── README.md
 ```
 
