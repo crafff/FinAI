@@ -30,6 +30,8 @@ dependencies = [
     "openai",
     # experiment harness configs (Task 19)
     "pyyaml",
+    # LangGraph orchestration (Task 18)
+    "langgraph",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +66,7 @@ testpaths = [
     "agents",
     "evaluation",
     "experiments",
+    "orchestration",
 ]
 # Make every module importable by bare name so cross-module tests work
 # without per-file sys.path manipulation.
@@ -80,4 +83,5 @@ pythonpath = [
     "agents",
     "evaluation",
     "experiments",
+    "orchestration",
 ]
