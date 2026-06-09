@@ -5,6 +5,7 @@ from llm_client import (
     Tool,
     ToolCall,
     ToolResult,
+    _adapt_openai_request,
     build_anthropic_request,
     build_openai_request,
     parse_anthropic_response,
@@ -15,6 +16,62 @@ from llm_client import (
     to_openai_messages,
     to_openai_tools,
 )
+
+
+# --------------------------------------------------------------------------
+# OpenAI newer-model parameter adaptation
+# --------------------------------------------------------------------------
+
+class _BadRequest(Exception):
+    """Stand-in for openai.BadRequestError (has .param / .message)."""
+
+    def __init__(self, message, param=None):
+        super().__init__(message)
+        self.message = message
+        self.param = param
+
+
+def test_adapt_renames_max_tokens_by_param():
+    req = {"model": "o4-mini", "max_tokens": 2048, "temperature": 0.2}
+    exc = _BadRequest(
+        "Unsupported parameter: 'max_tokens' is not supported with this model. "
+        "Use 'max_completion_tokens' instead.",
+        param="max_tokens",
+    )
+
+    out = _adapt_openai_request(req, exc)
+
+    assert "max_tokens" not in out
+    assert out["max_completion_tokens"] == 2048
+    assert req["max_tokens"] == 2048           # original not mutated
+
+
+def test_adapt_renames_max_tokens_by_message_when_param_missing():
+    req = {"max_tokens": 100}
+    exc = _BadRequest(
+        "use 'max_completion_tokens' instead of 'max_tokens'"
+    )
+
+    out = _adapt_openai_request(req, exc)
+    assert out == {"max_completion_tokens": 100}
+
+
+def test_adapt_drops_unsupported_temperature():
+    req = {"model": "o4-mini", "temperature": 0.2}
+    exc = _BadRequest(
+        "Unsupported value: 'temperature' does not support 0.2 with this model.",
+        param="temperature",
+    )
+
+    out = _adapt_openai_request(req, exc)
+    assert "temperature" not in out
+
+
+def test_adapt_returns_none_for_unrelated_error():
+    req = {"max_tokens": 100, "temperature": 0.2}
+    exc = _BadRequest("You exceeded your quota.", param=None)
+
+    assert _adapt_openai_request(req, exc) is None
 
 
 # --------------------------------------------------------------------------

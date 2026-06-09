@@ -58,6 +58,11 @@ RISK_JSON = (
     '{"method": "qualitative", "score": 6, "summary": "s", '
     '"factors": ["x"], "justification": "j"}'
 )
+QUANT_RISK_JSON = (
+    '{"method": "quantitative", "score": 4, "summary": "s", '
+    '"factors": ["leverage"], "justification": "j"}'
+)
+FACTORS_JSON = '{"factors": ["leverage", "competition"]}'
 REBUTTAL_JSON = (
     '{"targeted_claim": "c", "objections": ["o"], "severity": "high"}'
 )

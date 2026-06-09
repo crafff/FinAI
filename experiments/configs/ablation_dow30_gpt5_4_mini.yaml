@@ -1,0 +1,50 @@
+# Full ablation over the Dow Jones 30, GPT5.4-mini, everything allow_missing.
+# `single` and `full` are reused from earlier runs (their record.json is copied
+# into runs/ablation_dow30_gpt5_4_mini/ so resume skips them) — only the four
+# ablation systems below actually call the LLM.
+name: ablation_dow30_gpt5_4_mini
+
+ticker_set: dow30
+seed: 42
+
+# Degrade missing financials/news/social to empty instead of skipping the
+# ticker. Applies to EVERY system here (it is an experiment-wide setting), so
+# all systems see the same degraded inputs and stay comparable.
+allow_missing: true
+
+systems:
+  # --- reused (copied in; resume skips) ---
+  - {name: single, mode: single}
+  - name: full
+    mode: leader
+    subtasks: [fundamental, sentiment, risk]
+    red_team: true
+    max_rounds: 3
+
+  # --- the ablations that will actually run ---
+  # No red-team loop: isolates the Stage-3 rebuttal contribution.
+  - name: full_no_redteam
+    mode: leader
+    subtasks: [fundamental, sentiment, risk]
+    red_team: false
+
+  # Risk = qualitative analyst only (Task 12): drops the quantitative half.
+  - name: risk_qual_only
+    mode: leader
+    subtasks: [fundamental, sentiment, qualitative_risk]
+    red_team: true
+    max_rounds: 3
+
+  # Risk = quantitative analyst only (Task 13): drops the qualitative half.
+  - name: risk_quant_only
+    mode: leader
+    subtasks: [fundamental, sentiment, quantitative_risk]
+    red_team: true
+    max_rounds: 3
+
+  # Fundamentals only: drops sentiment + risk sub-tasks entirely.
+  - name: fundamentals_only
+    mode: leader
+    subtasks: [fundamental]
+    red_team: true
+    max_rounds: 1

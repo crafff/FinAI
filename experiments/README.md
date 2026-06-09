@@ -45,13 +45,38 @@ accepts it too: `--tickers dow30`. See `configs/ablation_dow30.yaml`.
 
 - **mode** — `single` (one agent sees all evidence) or `leader` (sub-task
   agents → leader → optional red-team loop).
-- **subtasks** — any subset/order of the registered agents
-  (`fundamental`, `sentiment`, `qualitative_risk`). Add a new agent by
-  registering one `SubtaskSpec` in `registry.py`; it becomes selectable by
-  name with no other changes.
+- **subtasks** — any subset/order of the registered agents:
+  `fundamental` (Task 10), `sentiment` (Task 11), and the risk agents —
+  `risk` (the Task 14 three-phase protocol: cooperative factor collection,
+  then the qualitative (Task 12) and quantitative (Task 13) analysts scoring
+  in competition; this is the full risk subtask), `qualitative_risk` (Task 12
+  alone), and `quantitative_risk` (Task 13 alone). The two single-method
+  risk agents exist for ablations; the full system uses `risk`. All three
+  risk agents render to the same `RiskAssessment` evidence, so the Leader /
+  red-team are agnostic to which ran. Add a new agent by registering one
+  `SubtaskSpec` in `registry.py`; it becomes selectable by name with no
+  other changes.
 - **red_team** / **max_rounds** — toggle the Stage-3 rebuttal loop and cap its
   rounds (`red_team: false` or `max_rounds: 0` ⇒ the Leader's initial call is
   final).
+
+Experiment-level option **`engine`** (default `pipeline`): which orchestration
+shell runs each `(ticker, system)` cell.
+
+- `pipeline` — the plain-Python pipeline (`pipeline.run_system`).
+- `langgraph` — the Task 18 LangGraph state machine
+  (`orchestration/graph.py`), driven over the same shared registry, agents,
+  and convergence logic, so results are equivalent; the difference is an
+  explicit, inspectable state graph (each agent a node, the rebuttal loop a
+  conditional edge). The runner injects its per-ticker `DataContext` into the
+  graph so data is still loaded once per ticker. The chosen engine is recorded
+  in `config.json` and each cell's `meta.json`.
+
+Set it in YAML (`engine: langgraph`) or override per run with the CLI:
+
+```bash
+uv run --extra rag python experiments/run_experiment.py <config.yaml> --engine langgraph
+```
 
 Experiment-level option **`allow_missing: true`** (default false): if a ticker's
 financials (FMP), news (FinnHub), or social (Reddit) can't be fetched — e.g. an

@@ -107,6 +107,37 @@ systems:
     assert off.allow_missing is False
 
 
+def test_engine_parses_and_defaults_pipeline(tmp_path):
+    default = load_experiment_config(_write(tmp_path, """
+name: a
+tickers: [AAPL]
+systems:
+  - {name: single, mode: single}
+"""))
+    assert default.engine == "pipeline"
+    assert to_jsonable(default)["engine"] == "pipeline"
+
+    lg = load_experiment_config(_write(tmp_path, """
+name: b
+tickers: [AAPL]
+engine: langgraph
+systems:
+  - {name: single, mode: single}
+"""))
+    assert lg.engine == "langgraph"
+    assert to_jsonable(lg)["engine"] == "langgraph"
+
+
+def test_validate_rejects_bad_engine():
+    cfg = ExperimentConfig(
+        name="x", tickers=["AAPL"],
+        systems=[SystemConfig("a", mode="single")],
+        engine="quantum",
+    )
+    with pytest.raises(ConfigError):
+        validate(cfg)
+
+
 def test_validate_rejects_duplicate_names():
     cfg = ExperimentConfig(
         name="x", tickers=["AAPL"],

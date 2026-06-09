@@ -24,6 +24,12 @@ from registry import REGISTRY
 
 VALID_MODES = ("single", "leader")
 
+# Execution engine for the (ticker, system) pipeline. Both drive the SAME
+# agents/registry/convergence logic; they differ only in the orchestration
+# shell - a plain-Python pipeline (default) or the Task 18 LangGraph state
+# machine.
+VALID_ENGINES = ("pipeline", "langgraph")
+
 # Named ticker universes usable directly from a config (`ticker_set: dow30`
 # or the shorthand `tickers: dow30`) and from the CLI (`--tickers dow30`).
 TICKER_SETS = {
@@ -64,6 +70,7 @@ class ExperimentConfig:
     n_boot: int = 10_000
     resume: bool = True             # skip (ticker, system) cells already done
     allow_missing: bool = False     # degrade missing financials/news/social to empty
+    engine: str = "pipeline"        # "pipeline" (plain Python) or "langgraph"
 
 
 class ConfigError(ValueError):
@@ -126,6 +133,11 @@ def validate(config: ExperimentConfig) -> None:
     if not config.systems:
         raise ConfigError("at least one system is required.")
 
+    if config.engine not in VALID_ENGINES:
+        raise ConfigError(
+            f"engine must be one of {VALID_ENGINES}, got {config.engine!r}."
+        )
+
     seen = set()
     for sys in config.systems:
         if sys.name in seen:
@@ -170,6 +182,7 @@ def load_experiment_config(path) -> ExperimentConfig:
         n_boot=int(data.get("n_boot", 10_000)),
         resume=bool(data.get("resume", True)),
         allow_missing=bool(data.get("allow_missing", False)),
+        engine=str(data.get("engine", "pipeline")),
     )
 
     validate(config)
@@ -188,6 +201,7 @@ def to_jsonable(config: ExperimentConfig) -> dict:
         "n_boot": config.n_boot,
         "resume": config.resume,
         "allow_missing": config.allow_missing,
+        "engine": config.engine,
         "systems": [
             {
                 "name": s.name,

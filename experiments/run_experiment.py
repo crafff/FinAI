@@ -33,6 +33,7 @@ for _sub in (
     "agents",
     "evaluation",
     "experiments",
+    "orchestration",
 ):
     sys.path.insert(0, str(ROOT / _sub))
 
@@ -59,6 +60,12 @@ def main():
         action="store_true",
         help="Re-run every cell even if a cached record.json exists.",
     )
+    parser.add_argument(
+        "--engine",
+        choices=("pipeline", "langgraph"),
+        help="Override the config's execution engine (plain pipeline or "
+        "the Task 18 LangGraph state machine).",
+    )
     args = parser.parse_args()
 
     config = load_experiment_config(args.config)
@@ -72,6 +79,8 @@ def main():
             ]
     if args.no_resume:
         config.resume = False
+    if args.engine:
+        config.engine = args.engine
 
     settings = load_settings()
     # With allow_missing, FMP/FinnHub are optional (their data degrades to

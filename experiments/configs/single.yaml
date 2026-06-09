@@ -1,5 +1,5 @@
 # Just the single-agent baseline, over one or more tickers.
-name: single_baseline
+name: single_baseline_final_gpt5_4_mini
 tickers: dow30
 
 # Optional. Default false. When true, a ticker whose financials (FMP) / news

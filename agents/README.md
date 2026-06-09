@@ -86,41 +86,82 @@ out-of-range signal to `neutral`, and clamps confidence to `[0, 1]`.
 the financials are already cut off at the fiscal year by the data layer,
 so everything visible predates the T0 cutoff.
 
+## `quantitative_risk_agent.py` — Quantitative risk agent (Task 13)
+
+Stage 1, the numbers-driven counterpart to the qualitative analyst. Given the
+structured financials (Task 4) and the pre-release price trend, it scores risk
+0–10 from leverage, liquidity, coverage, margin quality, valuation, and price
+behavior, emitting a `RiskScore` with `method="quantitative"`. It uses **no
+tools** (it reasons over the numbers it is handed, like the Leader) and
+degrades gracefully when financials are empty (e.g. an FMP 402 under
+`allow_missing`).
+
+## `risk_protocol.py` — Three-phase risk protocol (Task 14)
+
+`run_risk_protocol(...)` runs the risk coopetition and returns a
+`RiskAssessment`:
+
+1. **Phase 1 — cooperate** (`collect_risk_factors`): one tool-using call merges
+   10-K narrative risks and the financial picture into a shared, deduplicated
+   `collected_factors` agenda.
+2. **Phase 2 — compete:** the qualitative (Task 12) and quantitative (Task 13)
+   analysts each score risk while weighing those shared factors.
+3. **Phase 3 — carry both forward unaveraged:** the `RiskAssessment` holds the
+   shared factors plus both method-tagged scores, NOT reduced to one number —
+   the Leader reconciles them.
+
+This is the real risk subtask (`risk` in the registry); `qualitative_risk` and
+`quantitative_risk` remain as single-method ablations.
+
 ## `leader_agent.py` — Leader aggregation agent (Task 15)
 
-Stage 2. The Leader reads the three Stage-1 reports — `FundamentalReport`
-(Task 10), `SentimentReport` (Task 11), and a `RiskAssessment` (Task 14) —
-and makes a **free-judgment** initial prediction with a **mandatory
-rationale**: a `Prediction` (buy/not-buy + one-week target price). It uses
-**no tools and does no retrieval** (the subtask agents already did that), so
-it is a single `client.complete` call whose output is parsed by the single
-agent's `parse_prediction`.
+Stage 2. The Leader reads the Stage-1 reports — `FundamentalReport` (Task 10),
+`SentimentReport` (Task 11), and the `RiskAssessment` (Task 14) — and makes a
+**free-judgment** initial prediction with a **mandatory rationale**: a
+`Prediction` (buy/not-buy + one-week target price). It uses **no tools and does
+no retrieval** (the subtask agents already did that), so it is a single
+`client.complete` call whose output is parsed by the single agent's
+`parse_prediction`.
+
+The Leader is generic over a `reports` name→rendered-evidence map, so any
+subset/number of subtask agents works:
 
 ```python
-from leader_agent import risk_assessment_from_score, run_leader_agent
+from leader_agent import (
+    build_fundamental_evidence,
+    build_sentiment_evidence,
+    build_risk_evidence,
+    run_leader_agent,
+)
+from risk_protocol import run_risk_protocol
 
-# Interim: Tasks 13/14 (quantitative risk + three-phase protocol) are not
-# built yet, so wrap the Task-12 qualitative RiskScore into a one-score
-# RiskAssessment. The Leader is written against the final RiskAssessment
-# contract, so when Task 14 lands you pass its real (two-score) assessment
-# here instead — the Leader, its prompt, and its parser do not change.
-risk_assessment = risk_assessment_from_score(qual_score)
+risk_assessment = run_risk_protocol(
+    ticker="AAPL",
+    retrieval_tool=retrieval_tool,
+    financials=financials,
+    client=LLMClient(cfg.llm),
+    price_trend=prices["pre_release_trend"],
+)
+
+reports = {
+    "fundamental": build_fundamental_evidence(fundamental_report),
+    "sentiment": build_sentiment_evidence(sentiment_report),
+    "risk": build_risk_evidence(risk_assessment),
+}
 
 prediction = run_leader_agent(
     ticker="AAPL",
-    fundamental_report=fundamental_report,
-    sentiment_report=sentiment_report,
-    risk_assessment=risk_assessment,
+    reports=reports,
     client=LLMClient(cfg.llm),
     baseline_price=baseline_price,
 )
 ```
 
 `build_risk_evidence` renders `risk_assessment["scores"]` as a list, so one
-score (qualitative-only) and two scores (qualitative + quantitative) are
-handled identically — the future swap is a one-line runner change. The
-end-to-end runner is `run_leader_agent.py` (Stage-1 agents → adapter →
-Leader, saving one combined transcript plus all reports).
+score (a single-method ablation) and two scores (the full protocol) are handled
+identically. `risk_assessment_from_score` still wraps a lone `RiskScore` into a
+one-element `RiskAssessment` for the single-method risk ablations. The
+end-to-end runner is `run_leader_agent.py`.
 
 **Leakage:** the only price the Leader sees is the T0 baseline close (the
 allowed forecast anchor); the actual target-date close is never passed in.
@@ -166,9 +207,9 @@ uv run --extra rag python agents/run_full_agent.py  AAPL    # full system + red-
 Each writes a `runs/<name>/` tree (transcript, sub-task reports,
 final_prediction, ablation record, metrics). For the three-way ablation or
 multi-ticker sweeps, use `experiments/run_experiment.py` with a YAML config
-(see `experiments/README.md`). Risk input is still the qualitative-only
-stand-in (`risk_assessment_from_score`); swapping in Task 14's `RiskAssessment`
-is a one-line change in `experiments/registry.py`.
+(see `experiments/README.md`). The full system's risk input is the Task 14
+three-phase protocol (`risk`); the single-method risk agents are selectable for
+ablations.
 
 ## Tests
 

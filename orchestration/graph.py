@@ -88,13 +88,17 @@ def load_data_node(graph_ctx: GraphContext):
     """
 
     def node(state: PipelineState) -> PipelineState:
-        ctx = build_data_context(
-            state["ticker"],
-            graph_ctx.settings,
-            allow_missing=getattr(graph_ctx.system, "allow_missing", False),
-        )
-
-        graph_ctx.data_context = ctx
+        # Reuse a context injected by the caller (the experiment runner builds
+        # one per ticker and shares it across systems) instead of loading the
+        # data again; only fetch when none was provided.
+        ctx = graph_ctx.data_context
+        if ctx is None:
+            ctx = build_data_context(
+                state["ticker"],
+                graph_ctx.settings,
+                allow_missing=getattr(graph_ctx.system, "allow_missing", False),
+            )
+            graph_ctx.data_context = ctx
 
         state["t0_window"] = ctx.t0
         state["cutoff_timestamp_et"] = ctx.cutoff_timestamp
@@ -165,7 +169,12 @@ def subtask_node(name: str, graph_ctx: GraphContext):
             state["sentiment_report"] = report
             report_for_rendering = report
 
-        elif name == "qualitative_risk":
+        elif name in ("risk", "qualitative_risk", "quantitative_risk"):
+            # All risk subtasks land in the same Task 20 contract field. The
+            # full protocol ("risk", Task 14) already returns a RiskAssessment;
+            # the single-method variants return one wrapped by the registry -
+            # _as_risk_assessment is a no-op on an assessment and wraps a bare
+            # RiskScore, so every shape normalizes here.
             risk_assessment = _as_risk_assessment(report)
             state["risk_assessment"] = risk_assessment
             report_for_rendering = risk_assessment
@@ -175,8 +184,14 @@ def subtask_node(name: str, graph_ctx: GraphContext):
             # without changing the Task 20 state contract.
             report_for_rendering = report
 
+        rendered = spec.render(report_for_rendering)
         graph_ctx.raw_reports[name] = report_for_rendering
-        graph_ctx.rendered_reports[name] = spec.render(report_for_rendering)
+        graph_ctx.rendered_reports[name] = rendered
+
+        # Mirror the plain-Python pipeline's state shape so downstream saving
+        # (subtask_reports/<name>.json) is identical across both engines.
+        state.setdefault("subtask_reports", {})[name] = report_for_rendering
+        state.setdefault("subtask_reports_rendered", {})[name] = rendered
 
         return state
 
@@ -321,9 +336,13 @@ def route_after_leader_response(state: PipelineState) -> str:
     return "finalize"
 
 
-def build_langgraph(system, settings, client):
+def build_langgraph(system, settings, client, data_context=None):
     """
     Build and compile the Task 18 LangGraph graph.
+
+    `data_context`, when given, is reused by the load_data node instead of
+    fetching the ticker's data again (the experiment runner shares one
+    DataContext across all systems for a ticker).
 
     For leader-mode systems, the graph wires:
 
@@ -347,6 +366,7 @@ def build_langgraph(system, settings, client):
         settings=settings,
         client=client,
         system=system,
+        data_context=data_context,
     )
 
     graph = StateGraph(PipelineState)
@@ -404,9 +424,14 @@ def build_langgraph(system, settings, client):
     return graph.compile()
 
 
-def run_langgraph_system(system, ticker, settings, client) -> PipelineState:
+def run_langgraph_system(
+    system, ticker, settings, client, data_context=None
+) -> PipelineState:
     """
     Run one system configuration on one ticker through the LangGraph graph.
+
+    `data_context`, when provided, is reused instead of reloading the ticker's
+    data inside the graph.
     """
 
     state = new_state(
@@ -416,6 +441,21 @@ def run_langgraph_system(system, ticker, settings, client) -> PipelineState:
         max_rounds=system.max_rounds,
     )
 
-    graph = build_langgraph(system, settings, client)
+    graph = build_langgraph(system, settings, client, data_context=data_context)
 
     return graph.invoke(state)
+
+
+def run_system_graph(system, ctx, client, settings=None) -> PipelineState:
+    """
+    Runner-facing adapter mirroring `pipeline.run_system`'s signature, so the
+    experiment harness can switch engines by swapping this in. Drives the
+    Task 18 LangGraph state machine over an already-built DataContext.
+    """
+    return run_langgraph_system(
+        system=system,
+        ticker=ctx.ticker,
+        settings=settings,
+        client=client,
+        data_context=ctx,
+    )

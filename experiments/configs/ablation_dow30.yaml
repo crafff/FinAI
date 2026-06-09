@@ -15,8 +15,8 @@ systems:
   - {name: single, mode: single}
   - name: full
     mode: leader
-    subtasks: [fundamental, sentiment, qualitative_risk]
+    subtasks: [fundamental, sentiment, risk]
     red_team: true
     max_rounds: 3
   - {name: full_no_redteam, mode: leader,
-     subtasks: [fundamental, sentiment, qualitative_risk], red_team: false}
+     subtasks: [fundamental, sentiment, risk], red_team: false}

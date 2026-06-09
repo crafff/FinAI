@@ -87,7 +87,16 @@ def build_search_tool(retrieval_tool) -> Tool:
     )
 
 
-def build_user_prompt(ticker: str) -> str:
+def build_user_prompt(ticker: str, shared_factors: list[str] | None = None) -> str:
+    shared_note = ""
+    if shared_factors:
+        rendered = "\n".join(f"  - {f}" for f in shared_factors)
+        shared_note = (
+            f"\n\nA cooperative factor-collection phase identified these shared "
+            f"risk factors. Weigh each from the qualitative (10-K narrative) "
+            f"angle when you score:\n{rendered}\n"
+        )
+
     return (
         f"Assess the qualitative risk profile of {ticker.upper()} using "
         f"the 10-K search tool. Start with Item 1A Risk Factors, then "
@@ -95,6 +104,7 @@ def build_user_prompt(ticker: str) -> str:
         f"supply chain, and operational risks as needed. Use the retrieved "
         f"chunk ids or 10-K sections in your justification. Return the "
         f"required RiskScore JSON only."
+        f"{shared_note}"
     )
 
 
@@ -163,16 +173,22 @@ def run_qualitative_risk_agent(
     retrieval_tool,
     client: LLMClient,
     max_iterations: int = 8,
+    shared_factors: list[str] | None = None,
 ) -> RiskScore:
     """
     Run the qualitative risk agent end to end.
+
+    `shared_factors`, when provided, is the cooperative Phase-1 factor list
+    from the three-phase protocol (Task 14): the agent is asked to weigh each
+    shared factor from the qualitative angle. When omitted, the agent behaves
+    as the standalone Task 12 analyst.
     """
     tools = [build_search_tool(retrieval_tool)]
 
     messages = [
         {
             "role": "user",
-            "text": build_user_prompt(ticker),
+            "text": build_user_prompt(ticker, shared_factors),
         }
     ]
 
