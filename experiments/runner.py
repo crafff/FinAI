@@ -42,6 +42,18 @@ from pipeline import run_system
 from results import build_wide_df, compute_metrics, record_for_system
 
 
+def _resolve_engine(engine: str):
+    """
+    Return the (system, ctx, client, settings) -> state callable for the
+    chosen engine. The LangGraph engine (Task 18) is imported lazily so a
+    plain-pipeline run never needs langgraph installed.
+    """
+    if engine == "langgraph":
+        from graph import run_system_graph
+        return run_system_graph
+    return lambda system, ctx, client, settings=None: run_system(system, ctx, client)
+
+
 def _dump(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, indent=2, default=str), encoding="utf-8")
 
@@ -55,7 +67,7 @@ def _llm_config(settings, config: ExperimentConfig):
     return replace(settings.llm, **overrides) if overrides else settings.llm
 
 
-def _save_cell(cell_dir: Path, system, state, recorder) -> None:
+def _save_cell(cell_dir: Path, system, state, recorder, engine="pipeline") -> None:
     """Persist one finished (ticker, system) run."""
     cell_dir.mkdir(parents=True, exist_ok=True)
     recorder.save(cell_dir)
@@ -81,6 +93,7 @@ def _save_cell(cell_dir: Path, system, state, recorder) -> None:
         "subtasks": system.subtasks,
         "red_team": system.red_team,
         "max_rounds": system.max_rounds,
+        "engine": engine,
         "round_count": state.get("round_count", 0),
         "converged": state.get("converged", False),
     }
@@ -91,6 +104,7 @@ def run_experiment(config: ExperimentConfig, settings=None) -> Path:
     """Run the whole experiment; return the experiment output directory."""
     settings = settings or load_settings()
     llm_config = _llm_config(settings, config)
+    run_cell = _resolve_engine(config.engine)
 
     runs_base = Path(settings.runs_dir)
     if not runs_base.is_absolute():
@@ -139,14 +153,15 @@ def run_experiment(config: ExperimentConfig, settings=None) -> Path:
                     "subtasks": system.subtasks,
                     "red_team": system.red_team,
                     "max_rounds": system.max_rounds,
+                    "engine": config.engine,
                     "backend": llm_config.backend,
                     "model": llm_config.model,
                     "started_at": datetime.now(timezone.utc).isoformat(),
                 })
                 client = LLMClient(llm_config, recorder=recorder)
 
-                state = run_system(system, ctx, client)
-                _save_cell(cell_dir, system, state, recorder)
+                state = run_cell(system, ctx, client, settings)
+                _save_cell(cell_dir, system, state, recorder, engine=config.engine)
 
                 record = record_for_system(state, system.name)
                 _dump(record_path, record)

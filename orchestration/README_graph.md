@@ -163,24 +163,26 @@ Rendered versions of the reports are maintained internally inside `GraphContext`
 
 ---
 
-## Current Risk Workaround
+## Risk Subtask
 
-Tasks 13 and 14 are not yet implemented.
+The risk subtask now runs the full Task 14 three-phase protocol (`risk` in the
+registry):
 
-Task 12 currently produces a single qualitative `RiskScore`.
+1. **Phase 1 — cooperate:** the qualitative (Task 12, 10-K narrative) and
+   quantitative (Task 13, financials + price trend) perspectives agree on one
+   shared list of material risk factors (`collected_factors`).
+2. **Phase 2 — compete:** each analyst scores risk 0–10 while weighing those
+   shared factors, producing a method-tagged `RiskScore`.
+3. **Phase 3 — carry both forward unaveraged:** the resulting `RiskAssessment`
+   holds the shared factors plus both opposing scores, so the Leader reconciles
+   the disagreement rather than seeing a single blended number.
 
-The orchestration layer temporarily wraps this score into the Task 20 `RiskAssessment` structure:
-
-```python
-{
-    "collected_factors": score["factors"],
-    "scores": [score],
-}
-```
-
-This allows the Leader Agent, red-team process, and evaluation pipeline to consume the expected contract without requiring changes to existing agents.
-
-Once Tasks 13 and 14 are completed, their `RiskScore` outputs can be added to the `scores` list and the workaround can be removed.
+The graph stores the protocol output in `state["risk_assessment"]`. The
+single-method variants (`qualitative_risk`, `quantitative_risk`) remain
+available for ablations and land in the same field; `_as_risk_assessment`
+normalizes a bare `RiskScore` into a one-element `RiskAssessment` and is a
+no-op on an assessment that already has both scores, so every risk subtask
+shape is handled uniformly.
 
 ---
 
@@ -358,7 +360,15 @@ continue to provide experiment infrastructure.
 
 Task 18 adds an explicit LangGraph state machine on top of those components.
 
-This allows the original pipeline implementation and the LangGraph implementation to coexist for validation and regression testing.
+The experiment harness can drive either implementation: set `engine: langgraph`
+in the config (or pass `--engine langgraph`) and the runner executes each
+`(ticker, system)` cell through `run_system_graph`, which reuses the runner's
+per-ticker `DataContext` (injected into the graph's `load_data` node) and
+returns a `PipelineState` shaped exactly like the plain pipeline's — including
+`subtask_reports` — so saving, records, and metrics are engine-agnostic. The
+default `engine: pipeline` keeps the plain-Python path. Both share the same
+registry, agents, and convergence logic, so they coexist for validation and
+regression testing and should produce equivalent predictions.
 
 ---
 

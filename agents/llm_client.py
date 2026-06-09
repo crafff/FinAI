@@ -233,6 +233,36 @@ def build_openai_request(
     return request
 
 
+def _adapt_openai_request(request: dict, exc) -> dict | None:
+    """
+    Rewrite an OpenAI Chat Completions request for a newer model that rejected
+    a classic parameter, based on the 400 error. Returns an adapted copy, or
+    None when the error is not a known adaptable-parameter case (so the caller
+    re-raises). Pure: does not touch the network or mutate `request`.
+
+    Handles:
+      - `max_tokens` -> `max_completion_tokens` (required by o-series / gpt-5).
+      - dropping `temperature` when the model only allows its default.
+    """
+    param = getattr(exc, "param", None)
+    message = str(getattr(exc, "message", "") or exc)
+    new = dict(request)
+
+    if (param == "max_tokens" or
+            ("max_tokens" in message and "max_completion_tokens" in message)):
+        if "max_tokens" in new:
+            new["max_completion_tokens"] = new.pop("max_tokens")
+            return new
+
+    if (param == "temperature" or
+            ("temperature" in message and "support" in message.lower())):
+        if "temperature" in new:
+            new.pop("temperature")
+            return new
+
+    return None
+
+
 # --------------------------------------------------------------------------
 # Response parsing (pure)
 # --------------------------------------------------------------------------
@@ -363,8 +393,24 @@ class LLMClient:
             base_url=self.config.require_base_url(),
             api_key=self.config.require_api_key(),
         )
-        completion = client.chat.completions.create(**request)
-        return completion.model_dump()
+
+        # Newer OpenAI models (o-series, gpt-5, ...) reject the classic
+        # Chat Completions params: `max_tokens` must be `max_completion_tokens`,
+        # and they only allow the default `temperature`. Older models and local
+        # vLLM/ollama servers want the classic params, so we send those by
+        # default and only adapt on a 400 that names an unsupported param,
+        # retrying until the request is accepted (or the error is unrelated).
+        request = dict(request)
+        for _ in range(4):
+            try:
+                return client.chat.completions.create(**request).model_dump()
+            except openai.BadRequestError as exc:
+                adapted = _adapt_openai_request(request, exc)
+                if adapted is None or adapted == request:
+                    raise
+                request = adapted
+
+        return client.chat.completions.create(**request).model_dump()
 
 
 # --------------------------------------------------------------------------

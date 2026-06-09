@@ -46,7 +46,7 @@ def main():
         systems=[SystemConfig(
             "full",
             mode="leader",
-            subtasks=["fundamental", "sentiment", "qualitative_risk"],
+            subtasks=["fundamental", "sentiment", "risk"],
             red_team=True,
             max_rounds=3,
         )],

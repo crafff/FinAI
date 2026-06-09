@@ -81,6 +81,94 @@ def test_run_langgraph_system_with_no_subtasks(monkeypatch):
     assert state["converged"] is True
 
 
+def test_risk_subtask_writes_risk_assessment_with_both_scores(monkeypatch):
+    import graph as graph_module
+
+    fake_ctx = types.SimpleNamespace(
+        ticker="AAPL",
+        t0={"cutoff_timestamp_et": "2025-11-03T16:00:00-05:00"},
+        cutoff_timestamp="2025-11-03T16:00:00-05:00",
+        retrieval_tool=lambda query, k=5, section=None: "[chunk]",
+        financials={"debt": {"debt_to_equity": 1.2}},
+        news=[],
+        social=[],
+        prices={"target_price": 200.0, "pre_release_trend": []},
+        baseline_price=180.0,
+    )
+
+    monkeypatch.setattr(
+        graph_module,
+        "build_data_context",
+        lambda ticker, settings, allow_missing=False: fake_ctx,
+    )
+
+    system = SystemConfig(
+        name="risk_only",
+        mode="leader",
+        subtasks=["risk"],
+        red_team=False,
+        max_rounds=0,
+    )
+
+    state = run_langgraph_system(
+        system=system,
+        ticker="AAPL",
+        settings=object(),
+        client=FakeClient(),
+    )
+
+    # The Task 14 protocol output lands in the Task 20 risk_assessment field
+    # with both opposing scores.
+    assert "scores" in state["risk_assessment"]
+    assert len(state["risk_assessment"]["scores"]) == 2
+    assert state["final_prediction"]["direction"] == "Buy"
+
+
+def test_run_system_graph_reuses_injected_ctx_and_populates_subtask_reports(
+    monkeypatch,
+):
+    import graph as graph_module
+
+    def boom(*a, **k):
+        raise AssertionError(
+            "build_data_context must not run when a ctx is injected."
+        )
+
+    monkeypatch.setattr(graph_module, "build_data_context", boom)
+
+    ctx = types.SimpleNamespace(
+        ticker="AAPL",
+        t0={"cutoff_timestamp_et": "2025-11-03T16:00:00-05:00"},
+        cutoff_timestamp="2025-11-03T16:00:00-05:00",
+        retrieval_tool=lambda query, k=5, section=None: "[chunk]",
+        financials={"debt": {"debt_to_equity": 1.2}},
+        news=[],
+        social=[],
+        prices={"target_price": 200.0, "pre_release_trend": []},
+        baseline_price=180.0,
+    )
+
+    system = SystemConfig(
+        name="full",
+        mode="leader",
+        subtasks=["fundamental"],
+        red_team=False,
+        max_rounds=0,
+    )
+
+    state = graph_module.run_system_graph(
+        system, ctx, FakeClient(), settings=object()
+    )
+
+    # The injected ctx was reused (boom not raised), data fields are seeded,
+    # and subtask_reports mirrors the plain-Python pipeline's state shape so
+    # the runner's saving is engine-agnostic.
+    assert state["baseline_price"] == 180.0
+    assert "fundamental" in state["subtask_reports"]
+    assert "fundamental" in state["subtask_reports_rendered"]
+    assert state["final_prediction"]["direction"] == "Buy"
+
+
 def test_qualitative_risk_wrapped_into_risk_assessment():
     report = {
         "method": "qualitative",

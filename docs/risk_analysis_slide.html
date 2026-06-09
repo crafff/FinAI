@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Risk Analysis — Three-Phase Coopetition</title>
+<style>
+  :root{
+    --ink:#1b2430; --muted:#5b6776; --line:#dfe5ec; --bg:#ffffff;
+    --qual:#2f6fed; --qual-bg:#eaf1ff;
+    --quant:#11a36b; --quant-bg:#e7f7ef;
+    --coop:#7a5af5; --coop-bg:#efeaff;
+    --accent:#e8602c; --panel:#f6f8fb;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:#5a6473; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink);}
+  .slide{
+    width:1280px; height:720px; background:var(--bg); margin:24px auto; position:relative;
+    padding:38px 46px 30px; overflow:hidden;
+    box-shadow:0 18px 50px rgba(0,0,0,.35);
+  }
+  .kicker{font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700;}
+  h1{font-size:33px; line-height:1.1; margin:4px 0 2px; letter-spacing:-.01em;}
+  .sub{font-size:15px; color:var(--muted); margin-bottom:16px;}
+  .sub b{color:var(--ink);}
+
+  /* phase flow */
+  .flow{display:grid; grid-template-columns:1fr 34px 1fr 34px 1fr; align-items:stretch; gap:0; margin-bottom:16px;}
+  .phase{border:1.5px solid var(--line); border-radius:12px; padding:13px 15px; background:var(--panel);}
+  .phase .ph{font-size:11.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;}
+  .phase h3{font-size:16px; margin:3px 0 6px;}
+  .phase p{font-size:12.5px; color:var(--muted); line-height:1.38;}
+  .p1{border-color:#cfc4fb;} .p1 .ph{color:var(--coop);}
+  .p2{border-color:#cdd9ee;}
+  .p3{border-color:#f3c9b4;} .p3 .ph{color:var(--accent);}
+  .arrow{display:flex; align-items:center; justify-content:center; color:#9aa7b6; font-size:26px; font-weight:700;}
+
+  .two-agents{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;}
+  .ag{border-radius:9px; padding:8px 10px;}
+  .ag.q{background:var(--qual-bg);} .ag.n{background:var(--quant-bg);}
+  .ag .t{font-size:12px; font-weight:800;}
+  .ag.q .t{color:var(--qual);} .ag.n .t{color:var(--quant);}
+  .ag .d{font-size:11px; color:var(--muted); line-height:1.3; margin-top:2px;}
+
+  /* bottom */
+  .grid{display:grid; grid-template-columns:1.18fr 1fr; gap:18px; margin-top:6px;}
+  .card{border:1.5px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .card h4{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:9px;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  td{padding:5px 4px; vertical-align:top; border-bottom:1px solid #eef2f7;}
+  tr:last-child td{border-bottom:none;}
+  .src{font-weight:700; width:118px;}
+  .pill{display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:20px; margin-right:4px;}
+  .pill.q{background:var(--qual-bg); color:var(--qual);}
+  .pill.n{background:var(--quant-bg); color:var(--quant);}
+  .pill.c{background:var(--coop-bg); color:var(--coop);}
+  .no{color:#b23b3b; font-weight:700;}
+
+  .example{background:var(--panel); border:1.5px dashed #d7c2b6; border-radius:12px; padding:13px 15px;}
+  .example h4{color:var(--accent);}
+  .scores{display:flex; gap:10px; margin:6px 0 8px;}
+  .score{flex:1; border-radius:9px; padding:8px 10px; text-align:center;}
+  .score.q{background:var(--qual-bg);} .score.n{background:var(--quant-bg);}
+  .score .v{font-size:26px; font-weight:800; line-height:1;}
+  .score.q .v{color:var(--qual);} .score.n .v{color:var(--quant);}
+  .score .l{font-size:10.5px; color:var(--muted); margin-top:3px;}
+  .takeaway{font-size:12.5px; line-height:1.4;}
+  .takeaway b{color:var(--accent);}
+
+  .foot{position:absolute; left:46px; right:46px; bottom:12px; display:flex; justify-content:space-between;
+        font-size:11px; color:#9aa7b6; border-top:1px solid var(--line); padding-top:7px;}
+  @media print{
+    @page{size:1280px 720px; margin:0;}
+    html,body{background:#fff;}
+    .slide{margin:0; box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="kicker">FinAI · Stage 1 Subtask · Task 14</div>
+  <h1>Risk Analysis — a Three-Phase Coopetition</h1>
+  <div class="sub">Two opposing analysts <b>cooperate on what to worry about</b>, then <b>compete on how risky it is</b> — and their scores are carried forward <b>un-averaged</b> for the Leader to reconcile.</div>
+
+  <div class="flow">
+    <div class="phase p1">
+      <div class="ph">Phase 1 · Cooperate</div>
+      <h3>Shared risk agenda</h3>
+      <p>One joint pass merges 10-K narrative risks with the financial picture into a single, de-duplicated list of material risk factors.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="phase p2">
+      <div class="ph">Phase 2 · Compete</div>
+      <h3>Two independent scores</h3>
+      <div class="two-agents">
+        <div class="ag q"><div class="t">Qualitative</div><div class="d">10-K narrative → 0–10 risk</div></div>
+        <div class="ag n"><div class="t">Quantitative</div><div class="d">financials + price → 0–10 risk</div></div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="phase p3">
+      <div class="ph">Phase 3 · Keep both</div>
+      <h3>Un-averaged pair</h3>
+      <p>RiskAssessment = shared factors + both method-tagged scores. <b>No blending</b> — the Leader must reconcile the disagreement explicitly.</p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h4>What data each side reads</h4>
+      <table>
+        <tr><td class="src"><span class="pill c">Cooperate</span></td><td>10-K (RAG) <b>+</b> structured financials — only to enumerate factors</td></tr>
+        <tr><td class="src"><span class="pill q">Qualitative</span></td><td>10-K only via <code>search_10k</code>: Item 1A risk factors, litigation, competition, regulation, cyber, supply chain</td></tr>
+        <tr><td class="src"><span class="pill n">Quantitative</span></td><td>financials (leverage · liquidity · coverage · margins · valuation) + pre-T0 price trend; <i>no tools</i></td></tr>
+        <tr><td class="src">Never used</td><td><span class="no">news / social</span> (→ Sentiment agent) · <span class="no">target price</span> (the answer key)</td></tr>
+      </table>
+    </div>
+
+    <div class="example">
+      <h4>Example — AAPL</h4>
+      <div class="scores">
+        <div class="score q"><div class="v">7.0</div><div class="l">Qualitative<br>(10-K: many heavy risk sections)</div></div>
+        <div class="score n"><div class="v">5.0</div><div class="l">Quantitative<br>(D/E 1.52 · curr 0.89 · P/E 34)</div></div>
+      </div>
+      <div class="takeaway">Same company, two methods, a <b>2-point structural disagreement</b> — preserved, not averaged to 6.</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Leakage discipline: every input is cut off at the T0 close; the target-date price is never shown to an agent.</span>
+    <span>Tasks 12 + 13 → 14 · pluggable as <code>risk</code> in the experiment registry</span>
+  </div>
+</div>
+</body>
+</html>

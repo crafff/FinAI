@@ -13,18 +13,33 @@ systems:
   # Single-agent baseline: one agent sees all evidence and predicts.
   - {name: single, mode: single}
 
-  # Full system: all sub-task agents + leader + red-team loop (cap 3).
+  # Full system: all sub-task agents (risk = the Task 14 three-phase
+  # qualitative+quantitative protocol) + leader + red-team loop (cap 3).
   - name: full
     mode: leader
-    subtasks: [fundamental, sentiment, qualitative_risk]
+    subtasks: [fundamental, sentiment, risk]
     red_team: true
     max_rounds: 3
 
   # Ablation: full sub-tasks + leader, but NO red-team loop.
   - name: full_no_redteam
     mode: leader
-    subtasks: [fundamental, sentiment, qualitative_risk]
+    subtasks: [fundamental, sentiment, risk]
     red_team: false
+
+  # Ablation: risk via the qualitative analyst only (Task 12), no quantitative.
+  - name: risk_qual_only
+    mode: leader
+    subtasks: [fundamental, sentiment, qualitative_risk]
+    red_team: true
+    max_rounds: 3
+
+  # Ablation: risk via the quantitative analyst only (Task 13), no qualitative.
+  - name: risk_quant_only
+    mode: leader
+    subtasks: [fundamental, sentiment, quantitative_risk]
+    red_team: true
+    max_rounds: 3
 
   # Ablation: fundamentals only, single rebuttal round.
   - name: fundamentals_only

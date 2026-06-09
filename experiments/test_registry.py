@@ -1,5 +1,7 @@
 from _kit import (
+    FACTORS_JSON,
     FUNDAMENTAL_JSON,
+    QUANT_RISK_JSON,
     RISK_JSON,
     SENTIMENT_JSON,
     ScriptedClient,
@@ -10,7 +12,8 @@ from registry import REGISTRY, available_subtasks
 
 def test_registry_has_expected_agents():
     assert set(available_subtasks()) == {
-        "fundamental", "sentiment", "qualitative_risk"
+        "fundamental", "sentiment", "risk",
+        "qualitative_risk", "quantitative_risk",
     }
 
 
@@ -43,3 +46,31 @@ def test_qualitative_risk_spec_wraps_score_into_assessment():
 
     evidence = spec.render(report)
     assert len(evidence["scores"]) == 1
+
+
+def test_quantitative_risk_spec_wraps_score_into_assessment():
+    spec = REGISTRY["quantitative_risk"]
+    report = spec.run(fake_context(), ScriptedClient([QUANT_RISK_JSON]))
+
+    assert "scores" in report
+    assert report["scores"][0]["method"] == "quantitative"
+
+    evidence = spec.render(report)
+    assert len(evidence["scores"]) == 1
+
+
+def test_risk_spec_runs_three_phase_protocol_with_both_scores():
+    spec = REGISTRY["risk"]
+    # Phase 1 (factors) -> qualitative score -> quantitative score.
+    report = spec.run(
+        fake_context(),
+        ScriptedClient([FACTORS_JSON, RISK_JSON, QUANT_RISK_JSON]),
+    )
+
+    # The full protocol carries the shared factors plus BOTH scores, unaveraged.
+    assert report["collected_factors"] == ["leverage", "competition"]
+    methods = {s["method"] for s in report["scores"]}
+    assert methods == {"qualitative", "quantitative"}
+
+    evidence = spec.render(report)
+    assert len(evidence["scores"]) == 2

@@ -17,9 +17,9 @@ reports they produced, so every figure it cites must come from them.
 Risk input: the Leader is built against the *final* RiskAssessment contract
 (`collected_factors` + a list of method-tagged RiskScores), not a bare
 RiskScore. The risk evidence renders `scores` as a list, so it handles both
-the eventual qualitative+quantitative pair (Task 14) and - via
-`risk_assessment_from_score` below - the interim qualitative-only stand-in,
-with no change to the prompt or parser.
+the qualitative+quantitative pair (Task 14's three-phase protocol) and - via
+`risk_assessment_from_score` below - a single-method risk ablation, with no
+change to the prompt or parser.
 
 Leakage: the only price the Leader sees is the T0 baseline close (the
 prediction anchor, which is allowed). The actual target-date close is the
@@ -171,13 +171,14 @@ def build_user_prompt(
 
 def risk_assessment_from_score(score: RiskScore) -> RiskAssessment:
     """
-    Wrap a single RiskScore into a RiskAssessment - the interim
-    qualitative-only stand-in used until Task 14's three-phase protocol
-    exists.
+    Wrap a single RiskScore into a one-element RiskAssessment.
 
-    The Leader is agnostic to how many scores it receives, so when Task 14
-    lands the runner simply passes the real (two-score) RiskAssessment
-    instead of calling this adapter; nothing in this module changes.
+    The full risk subtask is Task 14's three-phase protocol
+    (`risk_protocol.run_risk_protocol`), which returns a two-score
+    RiskAssessment directly. This adapter is for the single-method risk
+    ablations (`qualitative_risk` / `quantitative_risk`), where only one
+    analyst runs. The Leader is agnostic to how many scores it receives, so
+    both paths flow through the same prompt and parser unchanged.
     """
     factors = score.get("factors") or []
 
